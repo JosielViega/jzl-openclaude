@@ -7,9 +7,10 @@ Este documento descreve os limites conceituais do JZL OpenClaude. Os componentes
 1. Um `projectRoot` explícito será a raiz autoritativa de todas as operações sobre um projeto gerenciado. Caminhos críticos serão derivados dele.
 2. O estado de workflow será estruturado. Markdown poderá servir à leitura humana, mas não será fonte autoritativa de estado.
 3. Somente o Mission Engine poderá realizar transições autoritativas de workflow.
-4. O OpenClaude Execution Adapter executará trabalho e reportará resultados, mas não controlará o workflow.
+4. O OpenClaude Execution Adapter delegará a execução e reportará resultados, mas não controlará o workflow.
 5. Futuramente, cada projeto gerenciado terá um diretório `.jzl/` com configuração e estado persistentes.
 6. Componentes inteligentes poderão propor decisões e produzir artefatos. Componentes determinísticos controlarão estado e regras verificáveis.
+7. O runtime do OpenClaude será isolado do processo principal do JZL em um processo worker iniciado com `cwd` igual ao `projectRoot` explícito e validado.
 
 ## Componentes
 
@@ -43,7 +44,11 @@ Seleciona o modelo adequado conforme a complexidade e as regras aplicáveis. Qwe
 
 ### OpenClaude Execution Adapter
 
-Encapsula a delegação de execução ao OpenClaude e normaliza os resultados reportados. Não decide nem altera o estado autoritativo do workflow.
+Representa a fronteira do JZL com o worker OpenClaude. O processo principal não inicializa o SDK diretamente: delega ao worker a execução no contexto do `projectRoot` e normaliza o resultado reportado. Não decide nem altera o estado autoritativo do workflow.
+
+### OpenClaude Worker
+
+Processo isolado que inicia com `cwd` igual ao `projectRoot` antes de inicializar o runtime do OpenClaude. Inicialmente, será descartável por execução e terminará após entregar seu resultado. Não possui autoridade para alterar o estado autoritativo do workflow.
 
 ### Validator Engine
 
@@ -63,7 +68,7 @@ Registra eventos e resultados relevantes da execução para auditoria, diagnóst
 2. O Mission Engine consulta estado, dependências e padrões aplicáveis.
 3. O Context Builder prepara o contexto mínimo da responsabilidade.
 4. O Session Manager isola a sessão, e o Model Router seleciona o modelo.
-5. O OpenClaude Execution Adapter delega a execução e coleta o resultado.
+5. A execução segue `JZL -> OpenClaude Execution Adapter -> OpenClaude Worker -> OpenClaude SDK -> modelo`, e o resultado retorna normalizado pelo adapter.
 6. O Validator Engine verifica deterministicamente os critérios aplicáveis.
 7. O Handoff Processor trata a comunicação estruturada quando outra responsabilidade precisa continuar o trabalho.
 8. O Mission Engine decide qualquer transição autoritativa, enquanto o Execution History / Event Log registra os eventos relevantes.
