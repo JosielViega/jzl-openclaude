@@ -15,6 +15,7 @@ test('inicia o worker com o projectRoot como cwd', async () => {
 
     const child = spawnOpenClaudeWorker(temporaryDirectory)
 
+    assert.notEqual(child.stdin, null)
     assert.notEqual(child.stdout, null)
     assert.notEqual(child.stderr, null)
 
