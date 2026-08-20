@@ -10,8 +10,15 @@ async function main() {
   }
 
   const request = parseOpenClaudeWorkerRequest(input)
+  const { executeOpenClaudeQuery } = await import(
+    './openclaude-worker-execution.js'
+  )
+  const execution = await executeOpenClaudeQuery({
+    projectRoot: process.cwd(),
+    prompt: request.prompt,
+  })
 
-  console.log(JSON.stringify(request))
+  console.log(JSON.stringify(execution))
 }
 
 try {
