@@ -1,39 +1,39 @@
-# Visao do produto
+# Visão do produto
 
-## Proposito
+## Propósito
 
-JZL OpenClaude sera um orquestrador local cujo objetivo principal e fazer projetos desenvolvidos por IA seguirem padroes previsiveis de estrutura, codigo e decisoes tecnicas. Essa padronizacao deve facilitar a revisao e a manutencao humanas entre varios projetos.
+JZL OpenClaude será um orquestrador local cujo objetivo principal é fazer projetos desenvolvidos por IA seguirem padrões previsíveis de estrutura, código e decisões técnicas. Essa padronização deve facilitar a revisão e a manutenção humanas entre vários projetos.
 
-A prioridade nao e criar algo revolucionario. A prioridade e simplicidade, previsibilidade, padronizacao e facilidade de revisao. A orquestracao e o meio para atingir esse objetivo.
+A prioridade não é criar algo revolucionário. A prioridade é simplicidade, previsibilidade, padronização e facilidade de revisão. A orquestração é o meio para atingir esse objetivo.
 
 ## Modelo de responsabilidade
 
-O fluxo fundamental e:
+O fluxo fundamental é:
 
 **JZL controla -> OpenClaude executa -> modelo raciocina**
 
-- O JZL controla estado, escopo, dependencias, criterios e workflow.
-- O OpenClaude recebe a delegacao, executa o trabalho e reporta resultados.
-- O modelo raciocina e produz conteudo dentro do contexto e da responsabilidade atribuidos.
+- O JZL controla estado, escopo, dependências, critérios e workflow.
+- O OpenClaude recebe a delegação, executa o trabalho e reporta resultados.
+- O modelo raciocina e produz conteúdo dentro do contexto e da responsabilidade atribuídos.
 
-O JZL nao tera um provider proprio de IA. A execucao sera delegada ao OpenClaude. Inicialmente, Qwen3.5-9B sera o modelo principal, com a possibilidade de usar outros modelos conforme a complexidade da tarefa.
+O JZL não terá um provider próprio de IA. A execução será delegada ao OpenClaude. Inicialmente, Qwen3.5-9B será o modelo principal, com a possibilidade de usar outros modelos conforme a complexidade da tarefa.
 
-## Principios
+## Princípios
 
-- Fornecer somente o contexto minimo necessario.
-- Isolar sessoes por responsabilidade.
+- Fornecer somente o contexto mínimo necessário.
+- Isolar sessões por responsabilidade.
 - Comunicar responsabilidades por Handoffs estruturados.
-- Nao compartilhar transcripts automaticamente.
-- Nao confiar no modelo para validar o proprio trabalho.
-- Validar deterministicamente estado, escopo, dependencias e criterios.
-- Preferir operacoes pequenas, verificaveis, resumiveis e idempotentes.
-- Derivar caminhos criticos de um `projectRoot` explicito.
-- Permitir que a IA decida e produza conteudo, enquanto codigo deterministico controla filesystem e workflow.
-- Evitar abstracoes prematuras.
-- Manter o codigo simples, explicito, previsivel e facil de revisar.
-- Aplicar controle deterministico por fora e inteligencia probabilistica por dentro.
+- Não compartilhar transcripts automaticamente.
+- Não confiar no modelo para validar o próprio trabalho.
+- Validar deterministicamente estado, escopo, dependências e critérios.
+- Preferir operações pequenas, verificáveis, resumíveis e idempotentes.
+- Derivar caminhos críticos de um `projectRoot` explícito.
+- Permitir que a IA decida e produza conteúdo, enquanto código determinístico controla filesystem e workflow.
+- Evitar abstrações prematuras.
+- Manter o código simples, explícito, previsível e fácil de revisar.
+- Aplicar controle determinístico por fora e inteligência probabilística por dentro.
 
-## Stack prioritaria dos projetos gerenciados
+## Stack prioritária dos projetos gerenciados
 
 - PHP
 - MySQL
@@ -41,4 +41,4 @@ O JZL nao tera um provider proprio de IA. A execucao sera delegada ao OpenClaude
 - HTML
 - CSS
 
-Frameworks, runtimes e dependencias adicionais devem ser evitados quando nao houver necessidade real.
+Frameworks, runtimes e dependências adicionais devem ser evitados quando não houver necessidade real.
