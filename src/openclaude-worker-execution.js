@@ -2,7 +2,7 @@ import { query } from '@gitlawb/openclaude/sdk'
 
 import { createOpenClaudeQueryOptions } from './openclaude-query-options.js'
 
-export async function executeOpenClaudeText(input) {
+export async function executeOpenClaudeQuery(input) {
   if (input === null || typeof input !== 'object' || Array.isArray(input)) {
     throw new Error('entrada deve ser um objeto')
   }
