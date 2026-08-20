@@ -25,14 +25,18 @@ export async function executeOpenClaudeText(input) {
     options,
   })
 
-  for await (const message of execution) {
-    if (message.type === 'result' && message.subtype === 'success') {
-      return {
-        sessionId: message.session_id,
-        result: message.result,
+  try {
+    for await (const message of execution) {
+      if (message.type === 'result' && message.subtype === 'success') {
+        return {
+          sessionId: message.session_id,
+          result: message.result,
+        }
       }
     }
-  }
 
-  throw new Error('OpenClaude não retornou resultado de sucesso')
+    throw new Error('OpenClaude não retornou resultado de sucesso')
+  } finally {
+    execution.close()
+  }
 }
