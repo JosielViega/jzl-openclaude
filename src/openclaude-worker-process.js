@@ -12,6 +12,6 @@ export function spawnOpenClaudeWorker(projectRoot) {
 
   return spawn(process.execPath, [workerPath], {
     cwd: validatedProjectRoot,
-    stdio: ['ignore', 'pipe', 'pipe'],
+    stdio: ['pipe', 'pipe', 'pipe'],
   })
 }
