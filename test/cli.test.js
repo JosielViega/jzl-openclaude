@@ -95,3 +95,96 @@ test('rejeita argumento extra após projectRoot', () => {
   assert.notEqual(result.status, 0)
   assert.match(result.stderr, /argumento desconhecido/)
 })
+
+const invalidRunCases = [
+  {
+    name: 'run rejeita ausência de --project-root',
+    argumentsList: () => ['run'],
+    expectedError: '--project-root é obrigatório',
+  },
+  {
+    name: 'run rejeita primeira flag desconhecida',
+    argumentsList: () => ['run', '--outro'],
+    expectedError: 'argumento desconhecido: --outro',
+  },
+  {
+    name: 'run rejeita --project-root sem valor',
+    argumentsList: () => ['run', '--project-root'],
+    expectedError: '--project-root exige um valor',
+  },
+  {
+    name: 'run rejeita --prompt como valor de --project-root',
+    argumentsList: () => ['run', '--project-root', '--prompt', 'teste'],
+    expectedError: '--project-root exige um valor',
+  },
+  {
+    name: 'run rejeita ausência de --prompt',
+    argumentsList: () => ['run', '--project-root', temporaryDirectory],
+    expectedError: '--prompt é obrigatório',
+  },
+  {
+    name: 'run rejeita flag de prompt desconhecida',
+    argumentsList: () => [
+      'run',
+      '--project-root',
+      temporaryDirectory,
+      '--outro',
+      'teste',
+    ],
+    expectedError: 'argumento desconhecido: --outro',
+  },
+  {
+    name: 'run rejeita --prompt sem valor',
+    argumentsList: () => [
+      'run',
+      '--project-root',
+      temporaryDirectory,
+      '--prompt',
+    ],
+    expectedError: '--prompt exige um valor',
+  },
+  {
+    name: 'run rejeita prompt iniciado por --',
+    argumentsList: () => [
+      'run',
+      '--project-root',
+      temporaryDirectory,
+      '--prompt',
+      '--qualquer',
+    ],
+    expectedError: '--prompt exige um valor',
+  },
+  {
+    name: 'run rejeita argumento extra',
+    argumentsList: () => [
+      'run',
+      '--project-root',
+      temporaryDirectory,
+      '--prompt',
+      'teste',
+      '--extra',
+    ],
+    expectedError: 'argumento desconhecido: --extra',
+  },
+  {
+    name: 'run rejeita prompt vazio',
+    argumentsList: () => [
+      'run',
+      '--project-root',
+      temporaryDirectory,
+      '--prompt',
+      '',
+    ],
+    expectedError: 'prompt não pode ser vazio',
+  },
+]
+
+for (const { name, argumentsList, expectedError } of invalidRunCases) {
+  test(name, () => {
+    const result = runCli(argumentsList())
+
+    assert.notEqual(result.status, 0)
+    assert.equal(result.stdout, '')
+    assert.equal(result.stderr.trim(), expectedError)
+  })
+}
