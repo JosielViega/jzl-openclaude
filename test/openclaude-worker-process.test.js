@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, normalize } from 'node:path'
+import { join } from 'node:path'
 import { test } from 'node:test'
 
 import { spawnOpenClaudeWorker } from '../src/openclaude-worker-process.js'
@@ -31,6 +31,8 @@ test('inicia o worker com o projectRoot como cwd', async () => {
       stderr += chunk
     })
 
+    child.stdin.end(JSON.stringify({ prompt: 'JZL_TEST' }))
+
     const result = await new Promise((resolve, reject) => {
       child.once('error', reject)
       child.once('close', (code, signal) => {
@@ -40,7 +42,7 @@ test('inicia o worker com o projectRoot como cwd', async () => {
 
     assert.equal(result.code, 0)
     assert.equal(result.signal, null)
-    assert.equal(stdout.trim(), normalize(temporaryDirectory))
+    assert.deepEqual(JSON.parse(stdout), { prompt: 'JZL_TEST' })
     assert.equal(stderr, '')
     assert.equal(process.cwd(), parentCwd)
     assert.deepEqual(readdirSync(temporaryDirectory), [])
