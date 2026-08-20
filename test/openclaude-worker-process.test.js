@@ -6,7 +6,7 @@ import { test } from 'node:test'
 
 import { spawnOpenClaudeWorker } from '../src/openclaude-worker-process.js'
 
-test('inicia o worker com o projectRoot como cwd', async () => {
+test('inicia o worker isolado com canais de processo disponíveis', async () => {
   const parentCwd = process.cwd()
   const temporaryDirectory = mkdtempSync(join(tmpdir(), 'jzl-worker-process-'))
 
@@ -31,7 +31,7 @@ test('inicia o worker com o projectRoot como cwd', async () => {
       stderr += chunk
     })
 
-    child.stdin.end(JSON.stringify({ prompt: 'JZL_TEST' }))
+    child.stdin.end('{')
 
     const result = await new Promise((resolve, reject) => {
       child.once('error', reject)
@@ -40,10 +40,10 @@ test('inicia o worker com o projectRoot como cwd', async () => {
       })
     })
 
-    assert.equal(result.code, 0)
+    assert.equal(result.code, 1)
     assert.equal(result.signal, null)
-    assert.deepEqual(JSON.parse(stdout), { prompt: 'JZL_TEST' })
-    assert.equal(stderr, '')
+    assert.equal(stdout, '')
+    assert.equal(stderr.trim(), 'entrada do worker deve ser JSON válido')
     assert.equal(process.cwd(), parentCwd)
     assert.deepEqual(readdirSync(temporaryDirectory), [])
   } finally {
