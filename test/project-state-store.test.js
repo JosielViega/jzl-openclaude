@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -15,7 +16,10 @@ import { join } from 'node:path'
 import { test } from 'node:test'
 
 import { createProjectContext } from '../src/project-context.js'
-import { initializeProjectStateStore } from '../src/project-state-store.js'
+import {
+  initializeProjectStateStore,
+  readProjectStateStore,
+} from '../src/project-state-store.js'
 
 const initialStateContent = '{\n  "schemaVersion": 1\n}\n'
 
@@ -145,4 +149,79 @@ test('rejeita diretório JZL que seja junction externa', (t) => {
     true,
   )
   assert.throws(() => statSync(externalStatePath))
+})
+
+test('lê estado válido inicializado', (t) => {
+  const root = createTemporaryRoot(t)
+  const context = createProjectContext(root)
+
+  initializeProjectStateStore(context)
+
+  assert.deepEqual(readProjectStateStore(context), { schemaVersion: 1 })
+})
+
+test('preserva campos adicionais durante a leitura', (t) => {
+  const root = createTemporaryRoot(t)
+  const jzlDirectoryPath = join(root, '.jzl')
+  const statePath = join(jzlDirectoryPath, 'state.json')
+  const content = '{\n  "schemaVersion": 1,\n  "missions": []\n}\n'
+
+  mkdirSync(jzlDirectoryPath)
+  writeFileSync(statePath, content, 'utf8')
+
+  assert.deepEqual(readProjectStateStore(createProjectContext(root)), {
+    schemaVersion: 1,
+    missions: [],
+  })
+  assert.equal(readFileSync(statePath, 'utf8'), content)
+})
+
+test('rejeita arquivo de estado inexistente sem inicializar', (t) => {
+  const root = createTemporaryRoot(t)
+
+  assert.throws(
+    () => readProjectStateStore(createProjectContext(root)),
+    { message: 'arquivo de estado do projeto não existe' },
+  )
+  assert.equal(existsSync(join(root, '.jzl')), false)
+})
+
+test('leitura rejeita state.json que seja diretório', (t) => {
+  const root = createTemporaryRoot(t)
+  const statePath = join(root, '.jzl', 'state.json')
+
+  mkdirSync(statePath, { recursive: true })
+
+  assert.throws(
+    () => readProjectStateStore(createProjectContext(root)),
+    { message: 'arquivo de estado do projeto não é um arquivo' },
+  )
+})
+
+test('rejeita arquivo de estado com UTF-8 inválido', (t) => {
+  const root = createTemporaryRoot(t)
+  const jzlDirectoryPath = join(root, '.jzl')
+  const statePath = join(jzlDirectoryPath, 'state.json')
+
+  mkdirSync(jzlDirectoryPath)
+  writeFileSync(statePath, Buffer.from([0xff, 0xfe, 0xfd]))
+
+  assert.throws(
+    () => readProjectStateStore(createProjectContext(root)),
+    { message: 'arquivo de estado do projeto não é UTF-8 válido' },
+  )
+})
+
+test('rejeita arquivo de estado com JSON inválido', (t) => {
+  const root = createTemporaryRoot(t)
+  const jzlDirectoryPath = join(root, '.jzl')
+  const statePath = join(jzlDirectoryPath, 'state.json')
+
+  mkdirSync(jzlDirectoryPath)
+  writeFileSync(statePath, '{"schemaVersion":', 'utf8')
+
+  assert.throws(
+    () => readProjectStateStore(createProjectContext(root)),
+    { message: 'arquivo de estado do projeto contém JSON inválido' },
+  )
 })

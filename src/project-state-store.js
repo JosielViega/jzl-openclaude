@@ -2,18 +2,23 @@ import {
   closeSync,
   mkdirSync,
   openSync,
+  readFileSync,
   renameSync,
   rmSync,
   statSync,
   writeFileSync,
 } from 'node:fs'
 import { randomUUID } from 'node:crypto'
+import { TextDecoder } from 'node:util'
 
 import {
   resolveExistingProjectPath,
   resolveProjectPathForCreate,
 } from './project-path.js'
-import { createInitialProjectState } from './project-state.js'
+import {
+  createInitialProjectState,
+  validateProjectState,
+} from './project-state.js'
 import {
   JZL_DIRECTORY_PROJECT_PATH,
   PROJECT_STATE_FILE_PROJECT_PATH,
@@ -109,4 +114,36 @@ export function initializeProjectStateStore(context) {
       rmSync(temporaryPath, { force: true })
     }
   }
+}
+
+export function readProjectStateStore(context) {
+  const statePath = resolveExistingPathIfPresent(
+    context,
+    PROJECT_STATE_FILE_PROJECT_PATH,
+  )
+
+  if (statePath === undefined) {
+    throw new Error('arquivo de estado do projeto não existe')
+  }
+
+  assertStatePathIsFile(statePath)
+
+  const stateBytes = readFileSync(statePath)
+  let content
+
+  try {
+    content = new TextDecoder('utf-8', { fatal: true }).decode(stateBytes)
+  } catch {
+    throw new Error('arquivo de estado do projeto não é UTF-8 válido')
+  }
+
+  let parsedState
+
+  try {
+    parsedState = JSON.parse(content)
+  } catch {
+    throw new Error('arquivo de estado do projeto contém JSON inválido')
+  }
+
+  return validateProjectState(parsedState)
 }
