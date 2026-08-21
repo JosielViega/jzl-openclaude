@@ -147,3 +147,65 @@ export function readProjectStateStore(context) {
 
   return validateProjectState(parsedState)
 }
+
+export function writeProjectStateStore(context, state) {
+  const validatedState = validateProjectState(state)
+  let serializedState
+
+  try {
+    serializedState = JSON.stringify(validatedState, null, 2)
+  } catch {
+    throw new Error('estado do projeto não pode ser serializado como JSON')
+  }
+
+  if (typeof serializedState !== 'string') {
+    throw new Error('estado do projeto não pode ser serializado como JSON')
+  }
+
+  const statePath = resolveExistingPathIfPresent(
+    context,
+    PROJECT_STATE_FILE_PROJECT_PATH,
+  )
+
+  if (statePath === undefined) {
+    throw new Error('arquivo de estado do projeto não existe')
+  }
+
+  assertStatePathIsFile(statePath)
+
+  const temporaryProjectPath = (
+    `${JZL_DIRECTORY_PROJECT_PATH}/.state-${randomUUID()}.tmp`
+  )
+  const temporaryPath = resolveProjectPathForCreate(
+    context,
+    temporaryProjectPath,
+  )
+  let temporaryCreated = false
+
+  try {
+    const temporaryFileDescriptor = openSync(temporaryPath, 'wx')
+    temporaryCreated = true
+
+    try {
+      writeFileSync(
+        temporaryFileDescriptor,
+        `${serializedState}\n`,
+        { encoding: 'utf8' },
+      )
+    } finally {
+      closeSync(temporaryFileDescriptor)
+    }
+
+    renameSync(temporaryPath, statePath)
+    temporaryCreated = false
+
+    return resolveExistingProjectPath(
+      context,
+      PROJECT_STATE_FILE_PROJECT_PATH,
+    )
+  } finally {
+    if (temporaryCreated) {
+      rmSync(temporaryPath, { force: true })
+    }
+  }
+}
