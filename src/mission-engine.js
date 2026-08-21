@@ -3,6 +3,7 @@ import {
   createMission,
   failMission,
   listReadyMissions,
+  prepareMissionExecution,
   requestMissionCorrection,
   retryMission,
   retryMissionCorrection,
@@ -103,5 +104,13 @@ export function retryProjectMissionCorrection(context, missionId) {
     context,
     missionId,
     retryMissionCorrection,
+  )
+}
+
+export function prepareProjectMissionExecution(context, missionId) {
+  return applyProjectMissionTransition(
+    context,
+    missionId,
+    prepareMissionExecution,
   )
 }

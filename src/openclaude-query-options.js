@@ -1,3 +1,4 @@
+import { createOpenClaudeToolPolicy } from './openclaude-tool-policy.js'
 import { validateProjectRoot } from './project-root.js'
 
 export function createOpenClaudeQueryOptions(projectRoot) {
@@ -5,9 +6,6 @@ export function createOpenClaudeQueryOptions(projectRoot) {
 
   return {
     cwd: validatedProjectRoot,
-    canUseTool: async () => ({
-      behavior: 'deny',
-      message: 'O JZL ainda não autorizou o uso de ferramentas',
-    }),
+    canUseTool: createOpenClaudeToolPolicy(validatedProjectRoot),
   }
 }

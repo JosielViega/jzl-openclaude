@@ -7,6 +7,7 @@ import {
   failMission,
   isMissionReady,
   listReadyMissions,
+  prepareMissionExecution,
   requestMissionCorrection,
   retryMission,
   retryMissionCorrection,
@@ -785,5 +786,67 @@ test('dependências failed e correction não liberam Mission dependente', () => 
 
     assert.equal(isMissionReady(dependent, [dependency]), false)
     assert.deepEqual(listReadyMissions([dependency, dependent]), [])
+  }
+})
+
+test('prepara execução de Mission pending pronta sem mutação', () => {
+  const metadata = { keep: true }
+  const mission = createValidMission({ metadata })
+
+  const runningMission = prepareMissionExecution([mission], mission.id)
+
+  assert.equal(runningMission.status, 'running')
+  assert.notStrictEqual(runningMission, mission)
+  assert.equal(mission.status, 'pending')
+  assert.strictEqual(runningMission.dependencies, mission.dependencies)
+  assert.strictEqual(runningMission.metadata, metadata)
+})
+
+test('prepara execução de Mission failed e correction', () => {
+  for (const status of ['failed', 'correction']) {
+    const dependency = createValidMission({ status: 'completed' })
+    const mission = createValidMission({
+      id: 'mission-0002',
+      status,
+      dependencies: ['mission-0001'],
+    })
+
+    const runningMission = prepareMissionExecution(
+      [dependency, mission],
+      mission.id,
+    )
+
+    assert.equal(runningMission.status, 'running')
+    assert.notStrictEqual(runningMission, mission)
+    assert.equal(mission.status, status)
+  }
+})
+
+test('preparação rejeita statuses não executáveis', () => {
+  for (const status of ['running', 'validation', 'completed']) {
+    const mission = createValidMission({ status })
+
+    assert.throws(
+      () => prepareMissionExecution([mission], mission.id),
+      { message: 'Mission não pode ser executada no status atual' },
+    )
+  }
+})
+
+test('preparação falha fechada quando dependency não está completed', () => {
+  const dependency = createValidMission()
+
+  for (const status of ['pending', 'failed', 'correction']) {
+    const mission = createValidMission({
+      id: 'mission-0002',
+      status,
+      dependencies: ['mission-0001'],
+    })
+
+    assert.throws(
+      () => prepareMissionExecution([dependency, mission], mission.id),
+      /Mission não está pronta/,
+    )
+    assert.equal(mission.status, status)
   }
 })

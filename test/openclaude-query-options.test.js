@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, normalize } from 'node:path'
 import { after, before, test } from 'node:test'
@@ -7,13 +7,18 @@ import { after, before, test } from 'node:test'
 import { createOpenClaudeQueryOptions } from '../src/openclaude-query-options.js'
 
 let temporaryDirectory
+let externalDirectory
 
 before(() => {
   temporaryDirectory = mkdtempSync(join(tmpdir(), 'jzl-openclaude-options-'))
+  externalDirectory = mkdtempSync(join(tmpdir(), 'jzl-openclaude-external-'))
+  writeFileSync(join(temporaryDirectory, 'inside.txt'), 'inside')
+  writeFileSync(join(externalDirectory, 'outside.txt'), 'outside')
 })
 
 after(() => {
   rmSync(temporaryDirectory, { recursive: true, force: true })
+  rmSync(externalDirectory, { recursive: true, force: true })
 })
 
 test('usa o projectRoot validado e normalizado como cwd', () => {
@@ -34,17 +39,45 @@ test('expõe canUseTool como função', () => {
   assert.equal(typeof options.canUseTool, 'function')
 })
 
-test('nega uso da ferramenta Read', async () => {
+test('autoriza Read interno válido', async () => {
   const options = createOpenClaudeQueryOptions(temporaryDirectory)
-  const result = await options.canUseTool('Read', { path: 'file.txt' })
+  const result = await options.canUseTool('Read', {
+    file_path: join(temporaryDirectory, 'inside.txt'),
+  })
 
-  assert.equal(result.behavior, 'deny')
-  assert.ok(result.message.length > 0)
+  assert.deepEqual(result, { behavior: 'allow' })
 })
 
-test('nega uso da ferramenta Write', async () => {
+test('autoriza Write interno válido', async () => {
   const options = createOpenClaudeQueryOptions(temporaryDirectory)
-  const result = await options.canUseTool('Write', { content: 'example' })
+  const result = await options.canUseTool('Write', {
+    file_path: join(temporaryDirectory, 'new.txt'),
+    content: 'example',
+  })
+
+  assert.deepEqual(result, { behavior: 'allow' })
+})
+
+test('nega Read e Write externos', async () => {
+  const options = createOpenClaudeQueryOptions(temporaryDirectory)
+  const externalPath = join(externalDirectory, 'outside.txt')
+
+  assert.equal(
+    (await options.canUseTool('Read', { file_path: externalPath })).behavior,
+    'deny',
+  )
+  assert.equal(
+    (await options.canUseTool('Write', {
+      file_path: externalPath,
+      content: 'example',
+    })).behavior,
+    'deny',
+  )
+})
+
+test('nega Bash', async () => {
+  const options = createOpenClaudeQueryOptions(temporaryDirectory)
+  const result = await options.canUseTool('Bash', { command: 'echo no' })
 
   assert.equal(result.behavior, 'deny')
   assert.ok(result.message.includes('JZL'))

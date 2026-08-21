@@ -16,6 +16,7 @@ import { createProjectContext } from '../src/project-context.js'
 import {
   resolveExistingProjectPath,
   resolveProjectPathForCreate,
+  toProjectPath,
 } from '../src/project-path.js'
 
 let temporaryBase
@@ -295,4 +296,40 @@ test('criação permite projectRoot que seja link sem criar entradas', () => {
     join(rootLink, 'nova-via-root-link', 'arquivo.txt'),
   )
   assert.equal(existsSync(newDirectory), false)
+})
+
+test('converte caminho absoluto interno em projectPath', () => {
+  assert.equal(toProjectPath(context, join(root, 'src', 'file.js')), join('src', 'file.js'))
+})
+
+test('converte o projectRoot exato em ponto', () => {
+  assert.equal(toProjectPath(context, root), '.')
+})
+
+test('rejeita caminho absoluto fora do projectRoot sem exigir existência', () => {
+  assert.throws(
+    () => toProjectPath(context, join(temporaryBase, 'outside', 'file.txt')),
+    { message: 'caminho absoluto está fora do projectRoot' },
+  )
+})
+
+test('rejeita prefixo textual enganoso do projectRoot', () => {
+  assert.throws(
+    () => toProjectPath(context, join(`${root}-other`, 'file.txt')),
+    { message: 'caminho absoluto está fora do projectRoot' },
+  )
+})
+
+test('aceita caminho absoluto através do projectRoot junction', () => {
+  assert.equal(
+    toProjectPath(linkedRootContext, join(rootLink, 'file.txt')),
+    'file.txt',
+  )
+})
+
+test('aceita caminho físico canônico de projectRoot junction', () => {
+  assert.equal(
+    toProjectPath(linkedRootContext, realpathSync.native(join(root, 'file.txt'))),
+    'file.txt',
+  )
 })

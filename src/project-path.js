@@ -13,6 +13,45 @@ function isPathInsideOrEqual(rootPath, targetPath) {
   )
 }
 
+export function toProjectPath(context, absolutePath) {
+  if (context === null || typeof context !== 'object' || Array.isArray(context)) {
+    throw new Error('contexto de projeto deve ser um objeto')
+  }
+
+  const projectRoot = validateProjectRoot(context.projectRoot)
+
+  if (absolutePath === undefined) {
+    throw new Error('caminho absoluto é obrigatório')
+  }
+
+  if (typeof absolutePath !== 'string') {
+    throw new Error('caminho absoluto deve ser uma string')
+  }
+
+  const trimmedAbsolutePath = absolutePath.trim()
+
+  if (trimmedAbsolutePath === '') {
+    throw new Error('caminho absoluto não pode ser vazio')
+  }
+
+  if (!isAbsolute(trimmedAbsolutePath)) {
+    throw new Error('caminho deve ser absoluto')
+  }
+
+  const canonicalProjectRoot = realpathSync.native(projectRoot)
+  let relativePath
+
+  if (isPathInsideOrEqual(projectRoot, trimmedAbsolutePath)) {
+    relativePath = relative(projectRoot, trimmedAbsolutePath)
+  } else if (isPathInsideOrEqual(canonicalProjectRoot, trimmedAbsolutePath)) {
+    relativePath = relative(canonicalProjectRoot, trimmedAbsolutePath)
+  } else {
+    throw new Error('caminho absoluto está fora do projectRoot')
+  }
+
+  return relativePath === '' ? '.' : relativePath
+}
+
 export function resolveExistingProjectPath(context, projectPath) {
   if (context === null || typeof context !== 'object' || Array.isArray(context)) {
     throw new Error('contexto de projeto deve ser um objeto')

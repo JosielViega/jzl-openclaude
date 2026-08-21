@@ -15,6 +15,7 @@ import {
   createProjectMission,
   failProjectMission,
   listReadyProjectMissions,
+  prepareProjectMissionExecution,
   requestProjectMissionCorrection,
   retryProjectMission,
   retryProjectMissionCorrection,
@@ -655,4 +656,46 @@ test('falha e correção preservam campos aditivos em todo o lifecycle', (t) => 
   }
 
   assert.equal(readProjectStateStore(context).missions[0].status, 'completed')
+})
+
+test('prepara execução persistida a partir de pending, failed e correction', (t) => {
+  for (const status of ['pending', 'failed', 'correction']) {
+    const { context } = createTemporaryProject(t)
+    const mission = createExistingMission('mission-0001', { status })
+
+    initializeProjectStateStore(context)
+    writeProjectStateStore(context, {
+      schemaVersion: 1,
+      missions: [mission],
+    })
+
+    const runningMission = prepareProjectMissionExecution(
+      context,
+      mission.id,
+    )
+
+    assert.equal(runningMission.status, 'running')
+    assert.equal(readProjectStateStore(context).missions[0].status, 'running')
+  }
+})
+
+test('preparação inválida não reescreve o State Store', (t) => {
+  for (const status of ['running', 'validation', 'completed']) {
+    const { context, projectRoot } = createTemporaryProject(t)
+    const mission = createExistingMission('mission-0001', { status })
+    const statePath = join(projectRoot, '.jzl', 'state.json')
+
+    initializeProjectStateStore(context)
+    writeProjectStateStore(context, {
+      schemaVersion: 1,
+      missions: [mission],
+    })
+    const originalContent = readFileSync(statePath, 'utf8')
+
+    assert.throws(
+      () => prepareProjectMissionExecution(context, mission.id),
+      { message: 'Mission não pode ser executada no status atual' },
+    )
+    assert.equal(readFileSync(statePath, 'utf8'), originalContent)
+  }
 })

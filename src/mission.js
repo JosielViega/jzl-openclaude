@@ -314,6 +314,24 @@ export function retryMissionCorrection(existingMissions, missionId) {
   }
 }
 
+export function prepareMissionExecution(existingMissions, missionId) {
+  const { mission } = getMissionForTransition(existingMissions, missionId)
+
+  if (mission.status === 'pending') {
+    return startMission(existingMissions, missionId)
+  }
+
+  if (mission.status === 'failed') {
+    return retryMission(existingMissions, missionId)
+  }
+
+  if (mission.status === 'correction') {
+    return retryMissionCorrection(existingMissions, missionId)
+  }
+
+  throw new Error('Mission não pode ser executada no status atual')
+}
+
 export function listReadyMissions(existingMissions) {
   validateExistingMissions(existingMissions)
 
