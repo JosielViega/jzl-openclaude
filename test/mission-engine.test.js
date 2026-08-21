@@ -10,7 +10,11 @@ import { join } from 'node:path'
 import { test } from 'node:test'
 
 import { createProjectContext } from '../src/project-context.js'
-import { createProjectMission } from '../src/mission-engine.js'
+import {
+  completeProjectMission,
+  createProjectMission,
+  listReadyProjectMissions,
+} from '../src/mission-engine.js'
 import {
   initializeProjectStateStore,
   readProjectStateStore,
@@ -226,4 +230,158 @@ test('não reutiliza gaps de IDs persistidos', (t) => {
     readProjectStateStore(context).missions.map((mission) => mission.id),
     ['mission-0001', 'mission-0003', 'mission-0004'],
   )
+})
+
+test('lista vazio para projeto sem Missions sem persistir ready', (t) => {
+  const { context } = createTemporaryProject(t)
+
+  initializeProjectStateStore(context)
+
+  assert.deepEqual(listReadyProjectMissions(context), [])
+  assert.deepEqual(readProjectStateStore(context), { schemaVersion: 1 })
+})
+
+test('lista somente Mission pronta quando há dependência pending', (t) => {
+  const { context } = createTemporaryProject(t)
+
+  initializeProjectStateStore(context)
+  createProjectMission(context, {
+    title: 'A',
+    objective: 'Executar A',
+  })
+  createProjectMission(context, {
+    title: 'B',
+    objective: 'Executar B',
+    dependencies: ['mission-0001'],
+  })
+
+  assert.deepEqual(
+    listReadyProjectMissions(context).map((mission) => mission.id),
+    ['mission-0001'],
+  )
+})
+
+test('concluir dependência libera Mission dependente sem persistir ready', (t) => {
+  const { context } = createTemporaryProject(t)
+
+  initializeProjectStateStore(context)
+  createProjectMission(context, {
+    title: 'A',
+    objective: 'Executar A',
+  })
+  createProjectMission(context, {
+    title: 'B',
+    objective: 'Executar B',
+    dependencies: ['mission-0001'],
+  })
+
+  const completedMission = completeProjectMission(context, 'mission-0001')
+  const readyMissions = listReadyProjectMissions(context)
+  const state = readProjectStateStore(context)
+
+  assert.equal(completedMission.status, 'completed')
+  assert.deepEqual(
+    readyMissions.map((mission) => mission.id),
+    ['mission-0002'],
+  )
+  assert.equal(state.missions[0].status, 'completed')
+  assert.equal(state.missions[1].status, 'pending')
+  assert.equal(
+    state.missions.some((mission) => mission.status === 'ready'),
+    false,
+  )
+
+  for (const field of ['ready', 'readyMissions', 'currentMission', 'nextMission']) {
+    assert.equal(Object.hasOwn(state, field), false)
+  }
+})
+
+test('não conclui Mission bloqueada por dependência pending', (t) => {
+  const { context } = createTemporaryProject(t)
+
+  initializeProjectStateStore(context)
+  createProjectMission(context, {
+    title: 'A',
+    objective: 'Executar A',
+  })
+  createProjectMission(context, {
+    title: 'B',
+    objective: 'Executar B',
+    dependencies: ['mission-0001'],
+  })
+
+  assert.throws(
+    () => completeProjectMission(context, 'mission-0002'),
+    { message: 'Mission não está pronta para conclusão' },
+  )
+  assert.deepEqual(
+    readProjectStateStore(context).missions.map((mission) => mission.status),
+    ['pending', 'pending'],
+  )
+})
+
+test('rejeita segunda conclusão sem alterar estado', (t) => {
+  const { context } = createTemporaryProject(t)
+
+  initializeProjectStateStore(context)
+  createProjectMission(context, {
+    title: 'A',
+    objective: 'Executar A',
+  })
+  completeProjectMission(context, 'mission-0001')
+  const persistedState = readProjectStateStore(context)
+
+  assert.throws(
+    () => completeProjectMission(context, 'mission-0001'),
+    { message: 'Mission não pode ser concluída no status atual' },
+  )
+  assert.deepEqual(readProjectStateStore(context), persistedState)
+})
+
+test('Mission inexistente não altera estado', (t) => {
+  const { context } = createTemporaryProject(t)
+
+  initializeProjectStateStore(context)
+  const mission = createProjectMission(context, {
+    title: 'A',
+    objective: 'Executar A',
+  })
+
+  assert.throws(
+    () => completeProjectMission(context, 'mission-9999'),
+    { message: 'Mission não existe' },
+  )
+  assert.deepEqual(readProjectStateStore(context).missions, [mission])
+})
+
+test('conclusão preserva campos aditivos do estado e da Mission', (t) => {
+  const { context } = createTemporaryProject(t)
+  const customField = { keep: true }
+  const metadata = { keep: true }
+  const mission = {
+    id: 'mission-0001',
+    title: 'Primeira',
+    objective: 'Concluir',
+    status: 'pending',
+    dependencies: [],
+    metadata,
+  }
+
+  initializeProjectStateStore(context)
+  writeProjectStateStore(context, {
+    schemaVersion: 1,
+    customField,
+    missions: [mission],
+  })
+
+  const completedMission = completeProjectMission(context, 'mission-0001')
+  const state = readProjectStateStore(context)
+
+  assert.deepEqual(state.customField, customField)
+  assert.deepEqual(completedMission.metadata, metadata)
+  assert.deepEqual(state.missions[0], {
+    ...mission,
+    status: 'completed',
+  })
+  assert.deepEqual(listReadyProjectMissions(context), [])
 })

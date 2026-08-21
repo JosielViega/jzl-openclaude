@@ -167,3 +167,42 @@ export function isMissionReady(mission, existingMissions) {
     (dependencyId) => missionsById.get(dependencyId).status === 'completed',
   )
 }
+
+export function completeMission(existingMissions, missionId) {
+  const missionsById = validateExistingMissions(existingMissions)
+
+  if (missionId === undefined) {
+    throw new Error('missionId é obrigatório')
+  }
+
+  if (typeof missionId !== 'string' || !missionIdPattern.test(missionId)) {
+    throw new Error('missionId é inválido')
+  }
+
+  const mission = missionsById.get(missionId)
+
+  if (mission === undefined) {
+    throw new Error('Mission não existe')
+  }
+
+  if (mission.status !== 'pending') {
+    throw new Error('Mission não pode ser concluída no status atual')
+  }
+
+  if (!isMissionReady(mission, existingMissions)) {
+    throw new Error('Mission não está pronta para conclusão')
+  }
+
+  return {
+    ...mission,
+    status: 'completed',
+  }
+}
+
+export function listReadyMissions(existingMissions) {
+  validateExistingMissions(existingMissions)
+
+  return existingMissions.filter(
+    (mission) => isMissionReady(mission, existingMissions),
+  )
+}

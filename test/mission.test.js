@@ -2,8 +2,10 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 import {
+  completeMission,
   createMission,
   isMissionReady,
+  listReadyMissions,
   validateMission,
 } from '../src/mission.js'
 
@@ -304,4 +306,110 @@ test('readiness rejeita estado inconsistente', () => {
     () => isMissionReady(mission, [duplicate, { ...duplicate }]),
     { message: 'ids das Missions existentes não podem ser duplicados' },
   )
+})
+
+test('conclui Mission pronta sem mutar a original', () => {
+  const metadata = { keep: true }
+  const mission = createValidMission({ metadata })
+  const existingMissions = [mission]
+
+  const completedMission = completeMission(
+    existingMissions,
+    'mission-0001',
+  )
+
+  assert.equal(completedMission.status, 'completed')
+  assert.notStrictEqual(completedMission, mission)
+  assert.equal(mission.status, 'pending')
+  assert.deepEqual(existingMissions, [mission])
+  assert.strictEqual(completedMission.dependencies, mission.dependencies)
+  assert.strictEqual(completedMission.metadata, metadata)
+})
+
+test('não conclui Mission com dependência pending', () => {
+  const dependency = createValidMission()
+  const mission = createValidMission({
+    id: 'mission-0002',
+    dependencies: ['mission-0001'],
+  })
+  const existingMissions = [dependency, mission]
+  const originalMissions = structuredClone(existingMissions)
+
+  assert.throws(
+    () => completeMission(existingMissions, 'mission-0002'),
+    { message: 'Mission não está pronta para conclusão' },
+  )
+  assert.deepEqual(existingMissions, originalMissions)
+})
+
+test('conclui Mission quando dependência está completed', () => {
+  const dependency = createValidMission({ status: 'completed' })
+  const mission = createValidMission({
+    id: 'mission-0002',
+    dependencies: ['mission-0001'],
+  })
+
+  const completedMission = completeMission(
+    [dependency, mission],
+    'mission-0002',
+  )
+
+  assert.equal(completedMission.status, 'completed')
+  assert.equal(dependency.status, 'completed')
+  assert.equal(mission.status, 'pending')
+})
+
+test('valida alvo e status da conclusão', () => {
+  const pendingMission = createValidMission()
+  const completedMission = createValidMission({ status: 'completed' })
+
+  assert.throws(
+    () => completeMission([pendingMission], 'mission-9999'),
+    { message: 'Mission não existe' },
+  )
+  assert.throws(
+    () => completeMission([completedMission], 'mission-0001'),
+    { message: 'Mission não pode ser concluída no status atual' },
+  )
+  assert.throws(
+    () => completeMission([pendingMission]),
+    { message: 'missionId é obrigatório' },
+  )
+  assert.throws(
+    () => completeMission([pendingMission], 'mission-1'),
+    { message: 'missionId é inválido' },
+  )
+})
+
+test('lista Missions prontas sem persistir ou mutar estado', () => {
+  const missionA = createValidMission()
+  const missionB = createValidMission({
+    id: 'mission-0002',
+    dependencies: ['mission-0001'],
+  })
+  const missionC = createValidMission({
+    id: 'mission-0003',
+    status: 'completed',
+  })
+  const missionD = createValidMission({ id: 'mission-0004' })
+  const initialMissions = [missionA, missionB, missionC, missionD]
+  const initialSnapshot = structuredClone(initialMissions)
+
+  const initiallyReady = listReadyMissions(initialMissions)
+
+  assert.deepEqual(initiallyReady, [missionA, missionD])
+  assert.notStrictEqual(initiallyReady, initialMissions)
+  assert.strictEqual(initiallyReady[0], missionA)
+  assert.strictEqual(initiallyReady[1], missionD)
+  assert.deepEqual(initialMissions, initialSnapshot)
+
+  const completedA = { ...missionA, status: 'completed' }
+  const updatedMissions = [completedA, missionB, missionC, missionD]
+  const updatedSnapshot = structuredClone(updatedMissions)
+  const subsequentlyReady = listReadyMissions(updatedMissions)
+
+  assert.deepEqual(subsequentlyReady, [missionB, missionD])
+  assert.strictEqual(subsequentlyReady[0], missionB)
+  assert.strictEqual(subsequentlyReady[1], missionD)
+  assert.deepEqual(updatedMissions, updatedSnapshot)
 })
