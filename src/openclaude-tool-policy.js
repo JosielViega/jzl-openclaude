@@ -94,6 +94,12 @@ function resolveAbsoluteExistingFile(context, absolutePath) {
   return { projectPath, targetPath }
 }
 
+function assertWritableFileHasSingleLink(targetPath) {
+  if (statSync(targetPath).nlink > 1) {
+    throw new Error('arquivo possui múltiplos hard links')
+  }
+}
+
 function resolveWritableFile(context, absolutePath) {
   const projectPath = toProjectPath(context, absolutePath)
 
@@ -107,6 +113,8 @@ function resolveWritableFile(context, absolutePath) {
     if (!statSync(targetPath).isFile()) {
       throw new Error('target não é arquivo')
     }
+
+    assertWritableFileHasSingleLink(targetPath)
 
     return targetPath
   } catch (error) {
@@ -195,6 +203,8 @@ export function createOpenClaudeToolPolicy(projectRoot) {
         ) {
           throw new Error('path protegido')
         }
+
+        assertWritableFileHasSingleLink(targetPath)
 
         return { behavior: 'allow' }
       }

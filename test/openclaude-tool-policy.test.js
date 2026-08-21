@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict'
 import {
   mkdirSync,
+  linkSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
   rmSync,
   symlinkSync,
+  statSync,
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -35,7 +37,20 @@ before(() => {
   writeFileSync(join(projectRoot, '.jzl', 'state.json'), '{}')
   writeFileSync(join(projectRoot, '.git', 'config'), 'config')
   writeFileSync(join(projectRoot, '.openclaude', 'settings.json'), '{}')
+  writeFileSync(join(projectRoot, 'src', 'hardlinked.txt'), 'normal hardlink')
   writeFileSync(join(externalRoot, 'outside.txt'), 'outside')
+  linkSync(
+    join(projectRoot, '.jzl', 'state.json'),
+    join(projectRoot, 'state-hardlink.json'),
+  )
+  linkSync(
+    join(projectRoot, 'AGENTS.md'),
+    join(projectRoot, 'agents-hardlink.txt'),
+  )
+  linkSync(
+    join(projectRoot, 'src', 'hardlinked.txt'),
+    join(projectRoot, 'src', 'hardlinked-alias.txt'),
+  )
 
   const linkType = process.platform === 'win32' ? 'junction' : 'dir'
   symlinkSync(externalRoot, join(projectRoot, 'external-link'), linkType)
@@ -71,6 +86,7 @@ test('autoriza Read de arquivo interno e AGENTS.md', async () => {
 })
 
 test('autoriza Write interno novo e existente sem escrever', async () => {
+  assert.equal(statSync(join(projectRoot, 'src', 'inside.txt')).nlink, 1)
   assert.deepEqual(
     await canUseTool('Write', {
       file_path: join(projectRoot, 'src', 'new.txt'),
@@ -217,6 +233,55 @@ test('protege alias físico para área protegida', async () => {
     old_string: '{}',
     new_string: 'no',
   })
+})
+
+test('nega hard link para .jzl em Write e Edit', async () => {
+  const statePath = join(projectRoot, '.jzl', 'state.json')
+  const hardlinkPath = join(projectRoot, 'state-hardlink.json')
+  const originalContent = readFileSync(statePath)
+
+  assert.ok(statSync(hardlinkPath).nlink > 1)
+  assert.deepEqual(
+    await canUseTool('Read', { file_path: hardlinkPath }),
+    { behavior: 'allow' },
+  )
+  await assertDenied('Write', { file_path: hardlinkPath, content: 'no' })
+  await assertDenied('Edit', {
+    file_path: hardlinkPath,
+    old_string: '{}',
+    new_string: 'no',
+  })
+  assert.deepEqual(readFileSync(statePath), originalContent)
+})
+
+test('nega hard link para AGENTS.md em Write e Edit', async () => {
+  const agentsPath = join(projectRoot, 'AGENTS.md')
+  const hardlinkPath = join(projectRoot, 'agents-hardlink.txt')
+  const originalContent = readFileSync(agentsPath)
+
+  assert.ok(statSync(hardlinkPath).nlink > 1)
+  await assertDenied('Write', { file_path: hardlinkPath, content: 'no' })
+  await assertDenied('Edit', {
+    file_path: hardlinkPath,
+    old_string: 'protected agents',
+    new_string: 'no',
+  })
+  assert.deepEqual(readFileSync(agentsPath), originalContent)
+})
+
+test('nega modificação de qualquer arquivo normal com múltiplos hard links', async () => {
+  const filePath = join(projectRoot, 'src', 'hardlinked.txt')
+  const aliasPath = join(projectRoot, 'src', 'hardlinked-alias.txt')
+  const originalContent = readFileSync(filePath)
+
+  assert.ok(statSync(filePath).nlink > 1)
+  await assertDenied('Write', { file_path: filePath, content: 'no' })
+  await assertDenied('Edit', {
+    file_path: aliasPath,
+    old_string: 'normal hardlink',
+    new_string: 'no',
+  })
+  assert.deepEqual(readFileSync(filePath), originalContent)
 })
 
 test('policy não cria, altera ou remove entradas', () => {
