@@ -71,6 +71,14 @@ function assertMissionDependenciesExist(mission, missionsById) {
   }
 }
 
+function assertMissionDependenciesCompleted(mission, missionsById) {
+  if (!mission.dependencies.every(
+    (dependencyId) => missionsById.get(dependencyId).status === 'completed',
+  )) {
+    throw new Error('Mission não está pronta para nova execução')
+  }
+}
+
 function getMissionForTransition(existingMissions, missionId) {
   const missionsById = validateExistingMissions(existingMissions)
 
@@ -90,7 +98,7 @@ function getMissionForTransition(existingMissions, missionId) {
 
   assertMissionDependenciesExist(mission, missionsById)
 
-  return mission
+  return { mission, missionsById }
 }
 
 export function validateMission(mission) {
@@ -126,6 +134,8 @@ export function validateMission(mission) {
     && mission.status !== 'running'
     && mission.status !== 'validation'
     && mission.status !== 'completed'
+    && mission.status !== 'failed'
+    && mission.status !== 'correction'
   ) {
     throw new Error('status da Mission não é suportado')
   }
@@ -200,7 +210,7 @@ export function isMissionReady(mission, existingMissions) {
 }
 
 export function startMission(existingMissions, missionId) {
-  const mission = getMissionForTransition(existingMissions, missionId)
+  const { mission } = getMissionForTransition(existingMissions, missionId)
 
   if (mission.status !== 'pending') {
     throw new Error('Mission não pode ser iniciada no status atual')
@@ -217,7 +227,7 @@ export function startMission(existingMissions, missionId) {
 }
 
 export function submitMissionForValidation(existingMissions, missionId) {
-  const mission = getMissionForTransition(existingMissions, missionId)
+  const { mission } = getMissionForTransition(existingMissions, missionId)
 
   if (mission.status !== 'running') {
     throw new Error('Mission não pode entrar em validação no status atual')
@@ -230,7 +240,7 @@ export function submitMissionForValidation(existingMissions, missionId) {
 }
 
 export function completeMission(existingMissions, missionId) {
-  const mission = getMissionForTransition(existingMissions, missionId)
+  const { mission } = getMissionForTransition(existingMissions, missionId)
 
   if (mission.status !== 'validation') {
     throw new Error('Mission não pode ser concluída no status atual')
@@ -239,6 +249,68 @@ export function completeMission(existingMissions, missionId) {
   return {
     ...mission,
     status: 'completed',
+  }
+}
+
+export function failMission(existingMissions, missionId) {
+  const { mission } = getMissionForTransition(existingMissions, missionId)
+
+  if (mission.status !== 'running') {
+    throw new Error('Mission não pode falhar no status atual')
+  }
+
+  return {
+    ...mission,
+    status: 'failed',
+  }
+}
+
+export function retryMission(existingMissions, missionId) {
+  const { mission, missionsById } = getMissionForTransition(
+    existingMissions,
+    missionId,
+  )
+
+  if (mission.status !== 'failed') {
+    throw new Error('Mission não pode ser reexecutada no status atual')
+  }
+
+  assertMissionDependenciesCompleted(mission, missionsById)
+
+  return {
+    ...mission,
+    status: 'running',
+  }
+}
+
+export function requestMissionCorrection(existingMissions, missionId) {
+  const { mission } = getMissionForTransition(existingMissions, missionId)
+
+  if (mission.status !== 'validation') {
+    throw new Error('Mission não pode entrar em correção no status atual')
+  }
+
+  return {
+    ...mission,
+    status: 'correction',
+  }
+}
+
+export function retryMissionCorrection(existingMissions, missionId) {
+  const { mission, missionsById } = getMissionForTransition(
+    existingMissions,
+    missionId,
+  )
+
+  if (mission.status !== 'correction') {
+    throw new Error('Mission não pode reexecutar correção no status atual')
+  }
+
+  assertMissionDependenciesCompleted(mission, missionsById)
+
+  return {
+    ...mission,
+    status: 'running',
   }
 }
 

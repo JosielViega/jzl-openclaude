@@ -13,7 +13,11 @@ import { createProjectContext } from '../src/project-context.js'
 import {
   completeProjectMission,
   createProjectMission,
+  failProjectMission,
   listReadyProjectMissions,
+  requestProjectMissionCorrection,
+  retryProjectMission,
+  retryProjectMissionCorrection,
   startProjectMission,
   submitProjectMissionForValidation,
 } from '../src/mission-engine.js'
@@ -422,6 +426,10 @@ test('Mission inexistente nas novas operações não altera estado', (t) => {
     startProjectMission,
     submitProjectMissionForValidation,
     completeProjectMission,
+    failProjectMission,
+    retryProjectMission,
+    requestProjectMissionCorrection,
+    retryProjectMissionCorrection,
   ]) {
     assert.throws(
       () => transition(context, 'mission-9999'),
@@ -470,4 +478,181 @@ test('lifecycle preserva campos aditivos do estado e da Mission', (t) => {
     status: 'completed',
   })
   assert.deepEqual(listReadyProjectMissions(context), [])
+})
+
+function assertReadyContract(context, expectedIds) {
+  const state = readProjectStateStore(context)
+
+  assert.deepEqual(
+    listReadyProjectMissions(context).map((mission) => mission.id),
+    expectedIds,
+  )
+  assert.equal(state.missions.some((mission) => mission.status === 'ready'), false)
+
+  for (const field of ['ready', 'readyMissions', 'currentMission', 'nextMission']) {
+    assert.equal(Object.hasOwn(state, field), false)
+  }
+}
+
+test('persiste falha técnica e libera dependente somente após recuperação completa', (t) => {
+  const { context } = createTemporaryProject(t)
+
+  initializeProjectStateStore(context)
+  createProjectMission(context, { title: 'A', objective: 'Executar A' })
+  createProjectMission(context, {
+    title: 'B',
+    objective: 'Executar B',
+    dependencies: ['mission-0001'],
+  })
+
+  assertReadyContract(context, ['mission-0001'])
+
+  assert.equal(startProjectMission(context, 'mission-0001').status, 'running')
+  assert.equal(readProjectStateStore(context).missions[0].status, 'running')
+  assertReadyContract(context, [])
+
+  assert.equal(failProjectMission(context, 'mission-0001').status, 'failed')
+  assert.deepEqual(
+    readProjectStateStore(context).missions.map((mission) => mission.status),
+    ['failed', 'pending'],
+  )
+  assertReadyContract(context, [])
+
+  assert.equal(readProjectStateStore(context).missions[0].status, 'failed')
+  assertReadyContract(context, [])
+  assert.equal(readProjectStateStore(context).missions[0].status, 'failed')
+
+  assert.equal(retryProjectMission(context, 'mission-0001').status, 'running')
+  assert.equal(readProjectStateStore(context).missions[0].status, 'running')
+  assertReadyContract(context, [])
+
+  assert.equal(
+    submitProjectMissionForValidation(context, 'mission-0001').status,
+    'validation',
+  )
+  assert.equal(readProjectStateStore(context).missions[0].status, 'validation')
+  assertReadyContract(context, [])
+
+  assert.equal(completeProjectMission(context, 'mission-0001').status, 'completed')
+  assert.equal(readProjectStateStore(context).missions[0].status, 'completed')
+  assertReadyContract(context, ['mission-0002'])
+})
+
+test('persiste correção e mantém dependente bloqueada até completed', (t) => {
+  const { context } = createTemporaryProject(t)
+
+  initializeProjectStateStore(context)
+  createProjectMission(context, { title: 'A', objective: 'Executar A' })
+  createProjectMission(context, {
+    title: 'B',
+    objective: 'Executar B',
+    dependencies: ['mission-0001'],
+  })
+
+  startProjectMission(context, 'mission-0001')
+  submitProjectMissionForValidation(context, 'mission-0001')
+  assert.equal(readProjectStateStore(context).missions[0].status, 'validation')
+
+  assert.equal(
+    requestProjectMissionCorrection(context, 'mission-0001').status,
+    'correction',
+  )
+  assert.deepEqual(
+    readProjectStateStore(context).missions.map((mission) => mission.status),
+    ['correction', 'pending'],
+  )
+  assertReadyContract(context, [])
+
+  assert.equal(readProjectStateStore(context).missions[0].status, 'correction')
+  assertReadyContract(context, [])
+  assert.equal(readProjectStateStore(context).missions[0].status, 'correction')
+
+  assert.equal(
+    retryProjectMissionCorrection(context, 'mission-0001').status,
+    'running',
+  )
+  assert.equal(readProjectStateStore(context).missions[0].status, 'running')
+  assertReadyContract(context, [])
+
+  submitProjectMissionForValidation(context, 'mission-0001')
+  assert.equal(readProjectStateStore(context).missions[0].status, 'validation')
+  assertReadyContract(context, [])
+
+  completeProjectMission(context, 'mission-0001')
+  assert.equal(readProjectStateStore(context).missions[0].status, 'completed')
+  assertReadyContract(context, ['mission-0002'])
+})
+
+test('novas transições inválidas preservam o State Store', (t) => {
+  const { context } = createTemporaryProject(t)
+
+  initializeProjectStateStore(context)
+  createProjectMission(context, { title: 'A', objective: 'Executar A' })
+  const pendingState = readProjectStateStore(context)
+
+  for (const [transition, message] of [
+    [failProjectMission, 'Mission não pode falhar no status atual'],
+    [retryProjectMission, 'Mission não pode ser reexecutada no status atual'],
+  ]) {
+    assert.throws(
+      () => transition(context, 'mission-0001'),
+      { message },
+    )
+    assert.deepEqual(readProjectStateStore(context), pendingState)
+  }
+
+  startProjectMission(context, 'mission-0001')
+  const runningState = readProjectStateStore(context)
+
+  assert.throws(
+    () => requestProjectMissionCorrection(context, 'mission-0001'),
+    { message: 'Mission não pode entrar em correção no status atual' },
+  )
+  assert.deepEqual(readProjectStateStore(context), runningState)
+
+  submitProjectMissionForValidation(context, 'mission-0001')
+  const validationState = readProjectStateStore(context)
+
+  assert.throws(
+    () => retryProjectMissionCorrection(context, 'mission-0001'),
+    { message: 'Mission não pode reexecutar correção no status atual' },
+  )
+  assert.deepEqual(readProjectStateStore(context), validationState)
+})
+
+test('falha e correção preservam campos aditivos em todo o lifecycle', (t) => {
+  const { context } = createTemporaryProject(t)
+  const customField = { keep: true }
+  const metadata = { keep: true }
+  const mission = createExistingMission('mission-0001', { metadata })
+
+  initializeProjectStateStore(context)
+  writeProjectStateStore(context, {
+    schemaVersion: 1,
+    customField,
+    missions: [mission],
+  })
+
+  const transitions = [
+    startProjectMission,
+    failProjectMission,
+    retryProjectMission,
+    submitProjectMissionForValidation,
+    requestProjectMissionCorrection,
+    retryProjectMissionCorrection,
+    submitProjectMissionForValidation,
+    completeProjectMission,
+  ]
+
+  for (const transition of transitions) {
+    const transitionedMission = transition(context, 'mission-0001')
+    const state = readProjectStateStore(context)
+
+    assert.deepEqual(transitionedMission.metadata, metadata)
+    assert.deepEqual(state.missions[0].metadata, metadata)
+    assert.deepEqual(state.customField, customField)
+    assertReadyContract(context, [])
+  }
+
+  assert.equal(readProjectStateStore(context).missions[0].status, 'completed')
 })

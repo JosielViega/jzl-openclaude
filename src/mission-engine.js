@@ -1,7 +1,11 @@
 import {
   completeMission,
   createMission,
+  failMission,
   listReadyMissions,
+  requestMissionCorrection,
+  retryMission,
+  retryMissionCorrection,
   startMission,
   submitMissionForValidation,
 } from './mission.js'
@@ -76,4 +80,28 @@ export function submitProjectMissionForValidation(context, missionId) {
 
 export function completeProjectMission(context, missionId) {
   return applyProjectMissionTransition(context, missionId, completeMission)
+}
+
+export function failProjectMission(context, missionId) {
+  return applyProjectMissionTransition(context, missionId, failMission)
+}
+
+export function retryProjectMission(context, missionId) {
+  return applyProjectMissionTransition(context, missionId, retryMission)
+}
+
+export function requestProjectMissionCorrection(context, missionId) {
+  return applyProjectMissionTransition(
+    context,
+    missionId,
+    requestMissionCorrection,
+  )
+}
+
+export function retryProjectMissionCorrection(context, missionId) {
+  return applyProjectMissionTransition(
+    context,
+    missionId,
+    retryMissionCorrection,
+  )
 }
