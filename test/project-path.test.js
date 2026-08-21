@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   realpathSync,
@@ -8,11 +9,14 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { isAbsolute, join } from 'node:path'
 import { after, before, test } from 'node:test'
 
 import { createProjectContext } from '../src/project-context.js'
-import { resolveExistingProjectPath } from '../src/project-path.js'
+import {
+  resolveExistingProjectPath,
+  resolveProjectPathForCreate,
+} from '../src/project-path.js'
 
 let temporaryBase
 let root
@@ -31,6 +35,7 @@ before(() => {
   const directoryLinkType = process.platform === 'win32' ? 'junction' : 'dir'
 
   mkdirSync(internal, { recursive: true })
+  mkdirSync(join(root, 'src'))
   mkdirSync(external)
   writeFileSync(join(root, 'file.txt'), '')
   writeFileSync(join(internal, 'inside.txt'), '')
@@ -150,4 +155,144 @@ test('permite projectRoot que seja link', () => {
     resolveExistingProjectPath(linkedRootContext, 'file.txt'),
     realpathSync.native(join(root, 'file.txt')),
   )
+})
+
+test('criação rejeita context null', () => {
+  assert.throws(
+    () => resolveProjectPathForCreate(null, 'novo.txt'),
+    { message: 'contexto de projeto deve ser um objeto' },
+  )
+})
+
+test('criação rejeita context que não seja objeto', () => {
+  assert.throws(
+    () => resolveProjectPathForCreate('contexto', 'novo.txt'),
+    { message: 'contexto de projeto deve ser um objeto' },
+  )
+})
+
+test('criação rejeita context array', () => {
+  assert.throws(
+    () => resolveProjectPathForCreate([], 'novo.txt'),
+    { message: 'contexto de projeto deve ser um objeto' },
+  )
+})
+
+test('criação delega a validação de projectRoot ausente', () => {
+  assert.throws(
+    () => resolveProjectPathForCreate({}, 'novo.txt'),
+    { message: 'projectRoot é obrigatório' },
+  )
+})
+
+test('criação rejeita projectPath ausente', () => {
+  assert.throws(
+    () => resolveProjectPathForCreate(context),
+    { message: 'projectPath é obrigatório' },
+  )
+})
+
+test('criação rejeita projectPath que não seja string', () => {
+  assert.throws(
+    () => resolveProjectPathForCreate(context, 123),
+    { message: 'projectPath deve ser uma string' },
+  )
+})
+
+test('criação rejeita projectPath vazio', () => {
+  assert.throws(
+    () => resolveProjectPathForCreate(context, '   '),
+    { message: 'projectPath não pode ser vazio' },
+  )
+})
+
+test('criação rejeita projectPath absoluto', () => {
+  assert.throws(
+    () => resolveProjectPathForCreate(context, join(root, 'novo-absoluto.txt')),
+    { message: 'projectPath deve ser relativo ao projectRoot' },
+  )
+})
+
+test('criação rejeita escape lexical', () => {
+  assert.throws(
+    () => resolveProjectPathForCreate(context, '../external/novo.txt'),
+    { message: 'projectPath escapa do projectRoot' },
+  )
+})
+
+test('criação rejeita target já existente', () => {
+  assert.throws(
+    () => resolveProjectPathForCreate(context, 'file.txt'),
+    { message: 'projectPath já existe' },
+  )
+})
+
+test('criação resolve destino normal sem criar entradas', () => {
+  const sourceDirectory = join(root, 'src')
+  const newDirectory = join(sourceDirectory, 'nova')
+  const newFile = join(newDirectory, 'arquivo.txt')
+
+  assert.equal(existsSync(sourceDirectory), true)
+  assert.equal(existsSync(newDirectory), false)
+
+  const result = resolveProjectPathForCreate(context, 'src/nova/arquivo.txt')
+
+  assert.equal(
+    result,
+    join(realpathSync.native(sourceDirectory), 'nova', 'arquivo.txt'),
+  )
+  assert.equal(typeof result, 'string')
+  assert.equal(isAbsolute(result), true)
+  assert.equal(existsSync(newDirectory), false)
+  assert.equal(existsSync(newFile), false)
+})
+
+test('criação resolve link interno sem criar entradas', () => {
+  const newDirectory = join(root, 'internal', 'nova')
+  const result = resolveProjectPathForCreate(
+    context,
+    'internal-link/nova/arquivo.txt',
+  )
+
+  assert.equal(
+    result,
+    join(realpathSync.native(join(root, 'internal')), 'nova', 'arquivo.txt'),
+  )
+  assert.ok(!result.includes('internal-link'))
+  assert.equal(existsSync(newDirectory), false)
+})
+
+test('criação rejeita link externo pela contenção canônica', () => {
+  assert.throws(
+    () => resolveProjectPathForCreate(
+      context,
+      'external-link/nova/arquivo.txt',
+    ),
+    { message: 'projectPath resolve para fora do projectRoot' },
+  )
+})
+
+test('criação rejeita ancestral existente que seja arquivo', () => {
+  assert.throws(
+    () => resolveProjectPathForCreate(context, 'file.txt/novo.txt'),
+    { message: 'ancestral existente de projectPath não é um diretório' },
+  )
+})
+
+test('criação permite projectRoot que seja link sem criar entradas', () => {
+  const newDirectory = join(root, 'nova-via-root-link')
+  const result = resolveProjectPathForCreate(
+    linkedRootContext,
+    'nova-via-root-link/arquivo.txt',
+  )
+
+  assert.equal(
+    result,
+    join(realpathSync.native(root), 'nova-via-root-link', 'arquivo.txt'),
+  )
+  assert.notEqual(
+    result,
+    join(rootLink, 'nova-via-root-link', 'arquivo.txt'),
+  )
+  assert.equal(existsSync(newDirectory), false)
 })
