@@ -1,5 +1,5 @@
-import { existsSync, realpathSync } from 'node:fs'
-import { isAbsolute, relative, resolve, sep } from 'node:path'
+import { existsSync, lstatSync, realpathSync, statSync } from 'node:fs'
+import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
 
 import { validateProjectRoot } from './project-root.js'
 
@@ -54,4 +54,84 @@ export function resolveExistingProjectPath(context, projectPath) {
   }
 
   return canonicalTarget
+}
+
+export function resolveProjectPathForCreate(context, projectPath) {
+  if (context === null || typeof context !== 'object' || Array.isArray(context)) {
+    throw new Error('contexto de projeto deve ser um objeto')
+  }
+
+  const projectRoot = validateProjectRoot(context.projectRoot)
+
+  if (projectPath === undefined) {
+    throw new Error('projectPath é obrigatório')
+  }
+
+  if (typeof projectPath !== 'string') {
+    throw new Error('projectPath deve ser uma string')
+  }
+
+  if (projectPath.trim() === '') {
+    throw new Error('projectPath não pode ser vazio')
+  }
+
+  if (isAbsolute(projectPath)) {
+    throw new Error('projectPath deve ser relativo ao projectRoot')
+  }
+
+  const resolvedPath = resolve(projectRoot, projectPath)
+
+  if (!isPathInsideOrEqual(projectRoot, resolvedPath)) {
+    throw new Error('projectPath escapa do projectRoot')
+  }
+
+  if (lstatSync(resolvedPath, { throwIfNoEntry: false }) !== undefined) {
+    throw new Error('projectPath já existe')
+  }
+
+  let existingAncestor = dirname(resolvedPath)
+  let existingAncestorStats
+
+  while (isPathInsideOrEqual(projectRoot, existingAncestor)) {
+    existingAncestorStats = lstatSync(existingAncestor, {
+      throwIfNoEntry: false,
+    })
+
+    if (existingAncestorStats !== undefined) {
+      break
+    }
+
+    if (existingAncestor === projectRoot) {
+      break
+    }
+
+    existingAncestor = dirname(existingAncestor)
+  }
+
+  if (existingAncestorStats === undefined) {
+    throw new Error(
+      'não foi possível localizar ancestral existente dentro do projectRoot',
+    )
+  }
+
+  const canonicalProjectRoot = realpathSync.native(projectRoot)
+  let canonicalExistingAncestor
+
+  try {
+    canonicalExistingAncestor = realpathSync.native(existingAncestor)
+  } catch {
+    throw new Error('ancestral existente de projectPath não pode ser resolvido')
+  }
+
+  if (!isPathInsideOrEqual(canonicalProjectRoot, canonicalExistingAncestor)) {
+    throw new Error('projectPath resolve para fora do projectRoot')
+  }
+
+  if (!statSync(canonicalExistingAncestor).isDirectory()) {
+    throw new Error('ancestral existente de projectPath não é um diretório')
+  }
+
+  const unresolvedSuffix = relative(existingAncestor, resolvedPath)
+
+  return resolve(canonicalExistingAncestor, unresolvedSuffix)
 }
