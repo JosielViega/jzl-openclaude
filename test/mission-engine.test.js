@@ -14,6 +14,8 @@ import {
   completeProjectMission,
   createProjectMission,
   listReadyProjectMissions,
+  startProjectMission,
+  submitProjectMissionForValidation,
 } from '../src/mission-engine.js'
 import {
   initializeProjectStateStore,
@@ -261,7 +263,7 @@ test('lista somente Mission pronta quando há dependência pending', (t) => {
   )
 })
 
-test('concluir dependência libera Mission dependente sem persistir ready', (t) => {
+test('persiste lifecycle completo e libera dependente somente após conclusão', (t) => {
   const { context } = createTemporaryProject(t)
 
   initializeProjectStateStore(context)
@@ -275,28 +277,46 @@ test('concluir dependência libera Mission dependente sem persistir ready', (t) 
     dependencies: ['mission-0001'],
   })
 
+  assert.deepEqual(
+    listReadyProjectMissions(context).map((mission) => mission.id),
+    ['mission-0001'],
+  )
+
+  const runningMission = startProjectMission(context, 'mission-0001')
+
+  assert.equal(runningMission.status, 'running')
+  assert.equal(readProjectStateStore(context).missions[0].status, 'running')
+  assert.deepEqual(listReadyProjectMissions(context), [])
+
+  const validationMission = submitProjectMissionForValidation(
+    context,
+    'mission-0001',
+  )
+
+  assert.equal(validationMission.status, 'validation')
+  assert.equal(readProjectStateStore(context).missions[0].status, 'validation')
+  assert.deepEqual(listReadyProjectMissions(context), [])
+
   const completedMission = completeProjectMission(context, 'mission-0001')
-  const readyMissions = listReadyProjectMissions(context)
   const state = readProjectStateStore(context)
 
   assert.equal(completedMission.status, 'completed')
   assert.deepEqual(
-    readyMissions.map((mission) => mission.id),
+    listReadyProjectMissions(context).map((mission) => mission.id),
     ['mission-0002'],
   )
-  assert.equal(state.missions[0].status, 'completed')
-  assert.equal(state.missions[1].status, 'pending')
-  assert.equal(
-    state.missions.some((mission) => mission.status === 'ready'),
-    false,
+  assert.deepEqual(
+    state.missions.map((mission) => mission.status),
+    ['completed', 'pending'],
   )
+  assert.equal(state.missions.some((mission) => mission.status === 'ready'), false)
 
   for (const field of ['ready', 'readyMissions', 'currentMission', 'nextMission']) {
     assert.equal(Object.hasOwn(state, field), false)
   }
 })
 
-test('não conclui Mission bloqueada por dependência pending', (t) => {
+test('não inicia Mission bloqueada por dependência pending', (t) => {
   const { context } = createTemporaryProject(t)
 
   initializeProjectStateStore(context)
@@ -311,8 +331,8 @@ test('não conclui Mission bloqueada por dependência pending', (t) => {
   })
 
   assert.throws(
-    () => completeProjectMission(context, 'mission-0002'),
-    { message: 'Mission não está pronta para conclusão' },
+    () => startProjectMission(context, 'mission-0002'),
+    { message: 'Mission não está pronta para iniciar' },
   )
   assert.deepEqual(
     readProjectStateStore(context).missions.map((mission) => mission.status),
@@ -320,7 +340,7 @@ test('não conclui Mission bloqueada por dependência pending', (t) => {
   )
 })
 
-test('rejeita segunda conclusão sem alterar estado', (t) => {
+test('rejeita transições repetidas sem alterar estado', (t) => {
   const { context } = createTemporaryProject(t)
 
   initializeProjectStateStore(context)
@@ -328,17 +348,67 @@ test('rejeita segunda conclusão sem alterar estado', (t) => {
     title: 'A',
     objective: 'Executar A',
   })
+  startProjectMission(context, 'mission-0001')
+  const runningState = readProjectStateStore(context)
+
+  assert.throws(
+    () => startProjectMission(context, 'mission-0001'),
+    { message: 'Mission não pode ser iniciada no status atual' },
+  )
+  assert.deepEqual(readProjectStateStore(context), runningState)
+
+  submitProjectMissionForValidation(context, 'mission-0001')
+  const validationState = readProjectStateStore(context)
+
+  assert.throws(
+    () => submitProjectMissionForValidation(context, 'mission-0001'),
+    { message: 'Mission não pode entrar em validação no status atual' },
+  )
+  assert.deepEqual(readProjectStateStore(context), validationState)
+
   completeProjectMission(context, 'mission-0001')
-  const persistedState = readProjectStateStore(context)
+  const completedState = readProjectStateStore(context)
 
   assert.throws(
     () => completeProjectMission(context, 'mission-0001'),
     { message: 'Mission não pode ser concluída no status atual' },
   )
-  assert.deepEqual(readProjectStateStore(context), persistedState)
+  assert.deepEqual(readProjectStateStore(context), completedState)
 })
 
-test('Mission inexistente não altera estado', (t) => {
+test('rejeita avanço direto sem alterar o estado persistido', (t) => {
+  const { context } = createTemporaryProject(t)
+
+  initializeProjectStateStore(context)
+  createProjectMission(context, {
+    title: 'A',
+    objective: 'Executar A',
+  })
+  const pendingState = readProjectStateStore(context)
+
+  assert.throws(
+    () => submitProjectMissionForValidation(context, 'mission-0001'),
+    { message: 'Mission não pode entrar em validação no status atual' },
+  )
+  assert.deepEqual(readProjectStateStore(context), pendingState)
+
+  assert.throws(
+    () => completeProjectMission(context, 'mission-0001'),
+    { message: 'Mission não pode ser concluída no status atual' },
+  )
+  assert.deepEqual(readProjectStateStore(context), pendingState)
+
+  startProjectMission(context, 'mission-0001')
+  const runningState = readProjectStateStore(context)
+
+  assert.throws(
+    () => completeProjectMission(context, 'mission-0001'),
+    { message: 'Mission não pode ser concluída no status atual' },
+  )
+  assert.deepEqual(readProjectStateStore(context), runningState)
+})
+
+test('Mission inexistente nas novas operações não altera estado', (t) => {
   const { context } = createTemporaryProject(t)
 
   initializeProjectStateStore(context)
@@ -346,15 +416,24 @@ test('Mission inexistente não altera estado', (t) => {
     title: 'A',
     objective: 'Executar A',
   })
+  const persistedState = readProjectStateStore(context)
 
-  assert.throws(
-    () => completeProjectMission(context, 'mission-9999'),
-    { message: 'Mission não existe' },
-  )
+  for (const transition of [
+    startProjectMission,
+    submitProjectMissionForValidation,
+    completeProjectMission,
+  ]) {
+    assert.throws(
+      () => transition(context, 'mission-9999'),
+      { message: 'Mission não existe' },
+    )
+    assert.deepEqual(readProjectStateStore(context), persistedState)
+  }
+
   assert.deepEqual(readProjectStateStore(context).missions, [mission])
 })
 
-test('conclusão preserva campos aditivos do estado e da Mission', (t) => {
+test('lifecycle preserva campos aditivos do estado e da Mission', (t) => {
   const { context } = createTemporaryProject(t)
   const customField = { keep: true }
   const metadata = { keep: true }
@@ -374,10 +453,17 @@ test('conclusão preserva campos aditivos do estado e da Mission', (t) => {
     missions: [mission],
   })
 
+  const runningMission = startProjectMission(context, 'mission-0001')
+  const validationMission = submitProjectMissionForValidation(
+    context,
+    'mission-0001',
+  )
   const completedMission = completeProjectMission(context, 'mission-0001')
   const state = readProjectStateStore(context)
 
   assert.deepEqual(state.customField, customField)
+  assert.deepEqual(runningMission.metadata, metadata)
+  assert.deepEqual(validationMission.metadata, metadata)
   assert.deepEqual(completedMission.metadata, metadata)
   assert.deepEqual(state.missions[0], {
     ...mission,

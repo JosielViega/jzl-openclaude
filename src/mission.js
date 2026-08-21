@@ -63,6 +63,36 @@ function validateExistingMissions(existingMissions) {
   return missionsById
 }
 
+function assertMissionDependenciesExist(mission, missionsById) {
+  for (const dependencyId of mission.dependencies) {
+    if (!missionsById.has(dependencyId)) {
+      throw new Error('dependência da Mission não existe')
+    }
+  }
+}
+
+function getMissionForTransition(existingMissions, missionId) {
+  const missionsById = validateExistingMissions(existingMissions)
+
+  if (missionId === undefined) {
+    throw new Error('missionId é obrigatório')
+  }
+
+  if (typeof missionId !== 'string' || !missionIdPattern.test(missionId)) {
+    throw new Error('missionId é inválido')
+  }
+
+  const mission = missionsById.get(missionId)
+
+  if (mission === undefined) {
+    throw new Error('Mission não existe')
+  }
+
+  assertMissionDependenciesExist(mission, missionsById)
+
+  return mission
+}
+
 export function validateMission(mission) {
   if (
     mission === null
@@ -91,7 +121,12 @@ export function validateMission(mission) {
     throw new Error('status da Mission deve ser uma string')
   }
 
-  if (mission.status !== 'pending' && mission.status !== 'completed') {
+  if (
+    mission.status !== 'pending'
+    && mission.status !== 'running'
+    && mission.status !== 'validation'
+    && mission.status !== 'completed'
+  ) {
     throw new Error('status da Mission não é suportado')
   }
 
@@ -157,40 +192,48 @@ export function isMissionReady(mission, existingMissions) {
   validateMission(mission)
   const missionsById = validateExistingMissions(existingMissions)
 
-  for (const dependencyId of mission.dependencies) {
-    if (!missionsById.has(dependencyId)) {
-      throw new Error('dependência da Mission não existe')
-    }
-  }
+  assertMissionDependenciesExist(mission, missionsById)
 
   return mission.status === 'pending' && mission.dependencies.every(
     (dependencyId) => missionsById.get(dependencyId).status === 'completed',
   )
 }
 
-export function completeMission(existingMissions, missionId) {
-  const missionsById = validateExistingMissions(existingMissions)
-
-  if (missionId === undefined) {
-    throw new Error('missionId é obrigatório')
-  }
-
-  if (typeof missionId !== 'string' || !missionIdPattern.test(missionId)) {
-    throw new Error('missionId é inválido')
-  }
-
-  const mission = missionsById.get(missionId)
-
-  if (mission === undefined) {
-    throw new Error('Mission não existe')
-  }
+export function startMission(existingMissions, missionId) {
+  const mission = getMissionForTransition(existingMissions, missionId)
 
   if (mission.status !== 'pending') {
-    throw new Error('Mission não pode ser concluída no status atual')
+    throw new Error('Mission não pode ser iniciada no status atual')
   }
 
   if (!isMissionReady(mission, existingMissions)) {
-    throw new Error('Mission não está pronta para conclusão')
+    throw new Error('Mission não está pronta para iniciar')
+  }
+
+  return {
+    ...mission,
+    status: 'running',
+  }
+}
+
+export function submitMissionForValidation(existingMissions, missionId) {
+  const mission = getMissionForTransition(existingMissions, missionId)
+
+  if (mission.status !== 'running') {
+    throw new Error('Mission não pode entrar em validação no status atual')
+  }
+
+  return {
+    ...mission,
+    status: 'validation',
+  }
+}
+
+export function completeMission(existingMissions, missionId) {
+  const mission = getMissionForTransition(existingMissions, missionId)
+
+  if (mission.status !== 'validation') {
+    throw new Error('Mission não pode ser concluída no status atual')
   }
 
   return {

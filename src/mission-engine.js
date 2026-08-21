@@ -2,6 +2,8 @@ import {
   completeMission,
   createMission,
   listReadyMissions,
+  startMission,
+  submitMissionForValidation,
 } from './mission.js'
 import {
   readProjectStateStore,
@@ -44,18 +46,34 @@ export function listReadyProjectMissions(context) {
   return listReadyMissions(existingMissions)
 }
 
-export function completeProjectMission(context, missionId) {
+function applyProjectMissionTransition(context, missionId, transition) {
   const state = readProjectStateStore(context)
   const existingMissions = getProjectStateMissions(state)
-  const completedMission = completeMission(existingMissions, missionId)
+  const transitionedMission = transition(existingMissions, missionId)
   const newState = {
     ...state,
     missions: existingMissions.map((mission) => (
-      mission.id === completedMission.id ? completedMission : mission
+      mission.id === transitionedMission.id ? transitionedMission : mission
     )),
   }
 
   writeProjectStateStore(context, newState)
 
-  return completedMission
+  return transitionedMission
+}
+
+export function startProjectMission(context, missionId) {
+  return applyProjectMissionTransition(context, missionId, startMission)
+}
+
+export function submitProjectMissionForValidation(context, missionId) {
+  return applyProjectMissionTransition(
+    context,
+    missionId,
+    submitMissionForValidation,
+  )
+}
+
+export function completeProjectMission(context, missionId) {
+  return applyProjectMissionTransition(context, missionId, completeMission)
 }

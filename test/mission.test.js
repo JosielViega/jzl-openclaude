@@ -6,6 +6,8 @@ import {
   createMission,
   isMissionReady,
   listReadyMissions,
+  startMission,
+  submitMissionForValidation,
   validateMission,
 } from '../src/mission.js'
 
@@ -100,18 +102,19 @@ test('valida status suportados da Mission', () => {
     () => validateMission(createValidMission({ status: 123 })),
     { message: 'status da Mission deve ser uma string' },
   )
-  assert.throws(
-    () => validateMission(createValidMission({ status: 'running' })),
-    { message: 'status da Mission não é suportado' },
-  )
-  assert.strictEqual(
-    validateMission(createValidMission({ status: 'pending' })).status,
-    'pending',
-  )
-  assert.strictEqual(
-    validateMission(createValidMission({ status: 'completed' })).status,
-    'completed',
-  )
+  for (const status of ['pending', 'running', 'validation', 'completed']) {
+    assert.strictEqual(
+      validateMission(createValidMission({ status })).status,
+      status,
+    )
+  }
+
+  for (const status of ['ready', 'failed', 'correction']) {
+    assert.throws(
+      () => validateMission(createValidMission({ status })),
+      { message: 'status da Mission não é suportado' },
+    )
+  }
 })
 
 test('valida dependencies da Mission', () => {
@@ -308,25 +311,22 @@ test('readiness rejeita estado inconsistente', () => {
   )
 })
 
-test('conclui Mission pronta sem mutar a original', () => {
+test('inicia Mission pronta sem mutar a original', () => {
   const metadata = { keep: true }
   const mission = createValidMission({ metadata })
   const existingMissions = [mission]
 
-  const completedMission = completeMission(
-    existingMissions,
-    'mission-0001',
-  )
+  const runningMission = startMission(existingMissions, 'mission-0001')
 
-  assert.equal(completedMission.status, 'completed')
-  assert.notStrictEqual(completedMission, mission)
+  assert.equal(runningMission.status, 'running')
+  assert.notStrictEqual(runningMission, mission)
   assert.equal(mission.status, 'pending')
   assert.deepEqual(existingMissions, [mission])
-  assert.strictEqual(completedMission.dependencies, mission.dependencies)
-  assert.strictEqual(completedMission.metadata, metadata)
+  assert.strictEqual(runningMission.dependencies, mission.dependencies)
+  assert.strictEqual(runningMission.metadata, metadata)
 })
 
-test('não conclui Mission com dependência pending', () => {
+test('não inicia Mission com dependência pending', () => {
   const dependency = createValidMission()
   const mission = createValidMission({
     id: 'mission-0002',
@@ -336,43 +336,140 @@ test('não conclui Mission com dependência pending', () => {
   const originalMissions = structuredClone(existingMissions)
 
   assert.throws(
-    () => completeMission(existingMissions, 'mission-0002'),
-    { message: 'Mission não está pronta para conclusão' },
+    () => startMission(existingMissions, 'mission-0002'),
+    { message: 'Mission não está pronta para iniciar' },
   )
   assert.deepEqual(existingMissions, originalMissions)
 })
 
-test('conclui Mission quando dependência está completed', () => {
+test('inicia Mission quando dependência está completed', () => {
   const dependency = createValidMission({ status: 'completed' })
   const mission = createValidMission({
     id: 'mission-0002',
     dependencies: ['mission-0001'],
   })
 
-  const completedMission = completeMission(
-    [dependency, mission],
-    'mission-0002',
-  )
+  const runningMission = startMission([dependency, mission], 'mission-0002')
 
-  assert.equal(completedMission.status, 'completed')
+  assert.equal(runningMission.status, 'running')
   assert.equal(dependency.status, 'completed')
   assert.equal(mission.status, 'pending')
 })
 
-test('valida alvo e status da conclusão', () => {
+test('rejeita início fora do status pending', () => {
+  for (const status of ['running', 'validation', 'completed']) {
+    const mission = createValidMission({ status })
+
+    assert.throws(
+      () => startMission([mission], mission.id),
+      { message: 'Mission não pode ser iniciada no status atual' },
+    )
+  }
+})
+
+test('envia Mission running para validação sem mutar a original', () => {
+  const metadata = { keep: true }
+  const mission = createValidMission({ status: 'running', metadata })
+
+  const validationMission = submitMissionForValidation([mission], mission.id)
+
+  assert.equal(validationMission.status, 'validation')
+  assert.notStrictEqual(validationMission, mission)
+  assert.equal(mission.status, 'running')
+  assert.strictEqual(validationMission.dependencies, mission.dependencies)
+  assert.strictEqual(validationMission.metadata, metadata)
+})
+
+test('rejeita validação fora do status running', () => {
+  for (const status of ['pending', 'validation', 'completed']) {
+    const mission = createValidMission({ status })
+
+    assert.throws(
+      () => submitMissionForValidation([mission], mission.id),
+      { message: 'Mission não pode entrar em validação no status atual' },
+    )
+  }
+})
+
+test('conclui Mission em validação sem mutar a original', () => {
+  const metadata = { keep: true }
+  const mission = createValidMission({ status: 'validation', metadata })
+
+  const completedMission = completeMission([mission], mission.id)
+
+  assert.equal(completedMission.status, 'completed')
+  assert.notStrictEqual(completedMission, mission)
+  assert.equal(mission.status, 'validation')
+  assert.strictEqual(completedMission.dependencies, mission.dependencies)
+  assert.strictEqual(completedMission.metadata, metadata)
+})
+
+test('rejeita conclusão fora do status validation', () => {
+  for (const status of ['pending', 'running', 'completed']) {
+    const mission = createValidMission({ status })
+
+    assert.throws(
+      () => completeMission([mission], mission.id),
+      { message: 'Mission não pode ser concluída no status atual' },
+    )
+  }
+})
+
+test('executa lifecycle puro completo preservando dados e estados anteriores', () => {
+  const metadata = { keep: true }
+  const pendingMission = createValidMission({ metadata })
+
+  const runningMission = startMission([pendingMission], pendingMission.id)
+  const validationMission = submitMissionForValidation(
+    [runningMission],
+    runningMission.id,
+  )
+  const completedMission = completeMission(
+    [validationMission],
+    validationMission.id,
+  )
+
+  assert.deepEqual(
+    [pendingMission.status, runningMission.status, validationMission.status, completedMission.status],
+    ['pending', 'running', 'validation', 'completed'],
+  )
+  assert.notStrictEqual(runningMission, pendingMission)
+  assert.notStrictEqual(validationMission, runningMission)
+  assert.notStrictEqual(completedMission, validationMission)
+  assert.strictEqual(completedMission.dependencies, pendingMission.dependencies)
+  assert.strictEqual(completedMission.metadata, metadata)
+})
+
+test('transições rejeitam dependência inexistente', () => {
+  const transitions = [
+    [startMission, 'pending'],
+    [submitMissionForValidation, 'running'],
+    [completeMission, 'validation'],
+  ]
+
+  for (const [transition, status] of transitions) {
+    const mission = createValidMission({
+      id: 'mission-0002',
+      status,
+      dependencies: ['mission-9999'],
+    })
+
+    assert.throws(
+      () => transition([mission], mission.id),
+      { message: 'dependência da Mission não existe' },
+    )
+  }
+})
+
+test('valida missionId e existência do alvo nas transições', () => {
   const pendingMission = createValidMission()
-  const completedMission = createValidMission({ status: 'completed' })
 
   assert.throws(
-    () => completeMission([pendingMission], 'mission-9999'),
+    () => startMission([pendingMission], 'mission-9999'),
     { message: 'Mission não existe' },
   )
   assert.throws(
-    () => completeMission([completedMission], 'mission-0001'),
-    { message: 'Mission não pode ser concluída no status atual' },
-  )
-  assert.throws(
-    () => completeMission([pendingMission]),
+    () => submitMissionForValidation([pendingMission]),
     { message: 'missionId é obrigatório' },
   )
   assert.throws(
@@ -389,27 +486,32 @@ test('lista Missions prontas sem persistir ou mutar estado', () => {
   })
   const missionC = createValidMission({
     id: 'mission-0003',
+    status: 'running',
+  })
+  const missionD = createValidMission({
+    id: 'mission-0004',
+    status: 'validation',
+  })
+  const missionE = createValidMission({
+    id: 'mission-0005',
     status: 'completed',
   })
-  const missionD = createValidMission({ id: 'mission-0004' })
-  const initialMissions = [missionA, missionB, missionC, missionD]
+  const initialMissions = [missionA, missionB, missionC, missionD, missionE]
   const initialSnapshot = structuredClone(initialMissions)
 
   const initiallyReady = listReadyMissions(initialMissions)
 
-  assert.deepEqual(initiallyReady, [missionA, missionD])
+  assert.deepEqual(initiallyReady, [missionA])
   assert.notStrictEqual(initiallyReady, initialMissions)
   assert.strictEqual(initiallyReady[0], missionA)
-  assert.strictEqual(initiallyReady[1], missionD)
   assert.deepEqual(initialMissions, initialSnapshot)
 
   const completedA = { ...missionA, status: 'completed' }
-  const updatedMissions = [completedA, missionB, missionC, missionD]
+  const updatedMissions = [completedA, missionB, missionC, missionD, missionE]
   const updatedSnapshot = structuredClone(updatedMissions)
   const subsequentlyReady = listReadyMissions(updatedMissions)
 
-  assert.deepEqual(subsequentlyReady, [missionB, missionD])
+  assert.deepEqual(subsequentlyReady, [missionB])
   assert.strictEqual(subsequentlyReady[0], missionB)
-  assert.strictEqual(subsequentlyReady[1], missionD)
   assert.deepEqual(updatedMissions, updatedSnapshot)
 })
