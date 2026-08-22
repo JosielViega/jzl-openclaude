@@ -14,7 +14,17 @@ import {
   submitProjectMissionForValidation,
 } from './mission-engine.js'
 import { buildMissionExecutionPrompt } from './mission-execution-prompt.js'
+import { createMissionExecutionSession } from './session-manager.js'
 import { resolveProjectStandards } from './standards-resolver.js'
+
+function errorSessionId(error) {
+  return (
+    error !== null
+    && typeof error === 'object'
+    && typeof error.sessionId === 'string'
+    && error.sessionId.trim() !== ''
+  ) ? error.sessionId : null
+}
 
 function persistTechnicalFailure(context, missionId, fromStatus, executionError) {
   try {
@@ -31,6 +41,7 @@ function persistTechnicalFailure(context, missionId, fromStatus, executionError)
       missionId,
       fromStatus,
       error: executionError,
+      sessionId: errorSessionId(executionError),
     })
   } catch (historyError) {
     throw new AggregateError(
@@ -61,9 +72,11 @@ export async function executeProjectMission(context, missionId) {
     })
 
     prompt = buildMissionExecutionPrompt(executionContext)
+    const session = createMissionExecutionSession(runningMission)
     execution = await executeOpenClaudeText({
       projectRoot: context.projectRoot,
       prompt,
+      session,
     })
   } catch (error) {
     persistTechnicalFailure(context, missionId, fromStatus, error)

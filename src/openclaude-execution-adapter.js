@@ -1,12 +1,13 @@
 import { spawnOpenClaudeWorker } from './openclaude-worker-process.js'
 import { normalizeOpenClaudeWorkerResult } from './openclaude-worker-result.js'
+import { validateMissionExecutionSession } from './session-manager.js'
 
 export async function executeOpenClaudeText(input) {
   if (input === null || typeof input !== 'object' || Array.isArray(input)) {
     throw new Error('entrada deve ser um objeto')
   }
 
-  const { projectRoot, prompt } = input
+  const { projectRoot, prompt, session } = input
 
   if (typeof prompt !== 'string') {
     throw new Error('prompt deve ser uma string')
@@ -17,6 +18,8 @@ export async function executeOpenClaudeText(input) {
   if (validatedPrompt === '') {
     throw new Error('prompt não pode ser vazio')
   }
+
+  validateMissionExecutionSession(session)
 
   const child = spawnOpenClaudeWorker(projectRoot)
 
@@ -43,7 +46,10 @@ export async function executeOpenClaudeText(input) {
     })
   })
 
-  child.stdin.end(JSON.stringify({ prompt: validatedPrompt }))
+  child.stdin.end(JSON.stringify({
+    prompt: validatedPrompt,
+    sessionMode: session.mode,
+  }))
 
   const { code, signal } = await workerClose
 

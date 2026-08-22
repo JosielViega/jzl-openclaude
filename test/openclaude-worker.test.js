@@ -24,7 +24,10 @@ test('reporta erro do parser para JSON inválido', () => {
 
     assert.equal(result.status, 1)
     assert.equal(result.signal, null)
-    assert.equal(result.stdout, '')
+    assert.deepEqual(JSON.parse(result.stdout), {
+      error: 'entrada do worker deve ser JSON válido',
+      sessionId: null,
+    })
     assert.equal(result.stderr.trim(), 'entrada do worker deve ser JSON válido')
     assert.equal(process.cwd(), parentCwd)
     assert.deepEqual(readdirSync(temporaryDirectory), [])

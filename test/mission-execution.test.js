@@ -142,6 +142,7 @@ test('config ausente falha Mission running antes de executar OpenClaude', async 
     outcome: 'ERROR',
     fromStatus: 'pending',
     toStatus: 'failed',
+    sessionId: null,
     errorMessage: 'arquivo de configuração do projeto não existe',
   })
 })
@@ -175,7 +176,8 @@ test('erro técnico registra execução partindo de failed sem usar erro anterio
     const event = events.at(-1)
     assert.equal(readProjectStateStore(context).missions[0].status, 'failed')
     assert.equal(event.data.fromStatus, 'failed')
-    assert.equal(event.data.toStatus, 'failed')
+  assert.equal(event.data.toStatus, 'failed')
+    assert.equal(event.data.sessionId, null)
     assert.equal(events.length, 2)
 })
 
@@ -265,6 +267,7 @@ test('correction com FAIL válido inicia e trata falha técnica normalmente', as
     outcome: 'ERROR',
     fromStatus: 'correction',
     toStatus: 'failed',
+    sessionId: null,
     errorMessage: 'arquivo de configuração do projeto não existe',
   })
 })

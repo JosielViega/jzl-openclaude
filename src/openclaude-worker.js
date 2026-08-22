@@ -16,6 +16,7 @@ async function main() {
   const execution = await executeOpenClaudeQuery({
     projectRoot: process.cwd(),
     prompt: request.prompt,
+    sessionMode: request.sessionMode,
   })
 
   console.log(JSON.stringify(execution))
@@ -24,6 +25,15 @@ async function main() {
 try {
   await main()
 } catch (error) {
-  console.error(error.message)
+  const errorMessage = error instanceof Error ? error.message : String(error)
+  const sessionId = (
+    error !== null
+    && typeof error === 'object'
+    && typeof error.sessionId === 'string'
+    && error.sessionId.trim() !== ''
+  ) ? error.sessionId : null
+
+  console.log(JSON.stringify({ error: errorMessage, sessionId }))
+  console.error(errorMessage)
   process.exitCode = 1
 }

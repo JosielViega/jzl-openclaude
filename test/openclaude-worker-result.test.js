@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { normalizeOpenClaudeWorkerResult } from '../src/openclaude-worker-result.js'
+import {
+  normalizeOpenClaudeWorkerResult,
+  OpenClaudeWorkerExecutionError,
+} from '../src/openclaude-worker-result.js'
 
 test('normaliza um resultado de sucesso', () => {
   const result = normalizeOpenClaudeWorkerResult({
@@ -36,6 +39,64 @@ test('preserva o contrato de sucesso', () => {
     sessionId: '  session-2  ',
     result: '',
   })
+})
+
+test('preserva sessionId do envelope de erro do worker', () => {
+  assert.throws(
+    () => normalizeOpenClaudeWorkerResult({
+      code: 1,
+      signal: null,
+      stdout: JSON.stringify({ error: 'provider falhou', sessionId: 'session-1' }),
+      stderr: 'diagnóstico',
+    }),
+    (error) => {
+      assert.ok(error instanceof OpenClaudeWorkerExecutionError)
+      assert.equal(error.message, 'provider falhou')
+      assert.equal(error.sessionId, 'session-1')
+      return true
+    },
+  )
+})
+
+test('preserva sessionId null do envelope de erro do worker', () => {
+  assert.throws(
+    () => normalizeOpenClaudeWorkerResult({
+      code: 1,
+      signal: null,
+      stdout: JSON.stringify({ error: 'query não iniciou', sessionId: null }),
+      stderr: '',
+    }),
+    (error) => {
+      assert.ok(error instanceof OpenClaudeWorkerExecutionError)
+      assert.equal(error.message, 'query não iniciou')
+      assert.equal(error.sessionId, null)
+      return true
+    },
+  )
+})
+
+test('envelope de erro malformado usa fallback de stderr', () => {
+  assert.throws(
+    () => normalizeOpenClaudeWorkerResult({
+      code: 1,
+      signal: null,
+      stdout: JSON.stringify({ error: '', sessionId: 123 }),
+      stderr: '  erro de fallback  ',
+    }),
+    { message: 'erro de fallback' },
+  )
+})
+
+test('não aceita envelope de erro com código zero', () => {
+  assert.throws(
+    () => normalizeOpenClaudeWorkerResult({
+      code: 0,
+      signal: null,
+      stdout: JSON.stringify({ error: 'falha', sessionId: null }),
+      stderr: '',
+    }),
+    { message: 'OpenClaude worker retornou erro com código zero' },
+  )
 })
 
 const errorCases = [

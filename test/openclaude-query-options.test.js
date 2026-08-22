@@ -31,6 +31,11 @@ test('retorna somente as opções mínimas autorizadas', () => {
   const options = createOpenClaudeQueryOptions(temporaryDirectory)
 
   assert.deepEqual(Object.keys(options).sort(), ['canUseTool', 'cwd'])
+  assert.equal(options.sessionId, undefined)
+  assert.equal(options.resume, undefined)
+  assert.equal(options.continue, undefined)
+  assert.equal(options.fork, undefined)
+  assert.equal(options.forkSession, undefined)
 })
 
 test('expõe canUseTool como função', () => {

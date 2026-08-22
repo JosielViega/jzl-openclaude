@@ -29,5 +29,20 @@ export function parseOpenClaudeWorkerRequest(input) {
     throw new Error('prompt não pode ser vazio')
   }
 
-  return { prompt: validatedPrompt }
+  if (!Object.hasOwn(request, 'sessionMode')) {
+    throw new Error('sessionMode é obrigatório')
+  }
+
+  if (typeof request.sessionMode !== 'string') {
+    throw new Error('sessionMode deve ser uma string')
+  }
+
+  if (request.sessionMode !== 'fresh') {
+    throw new Error('sessionMode do worker não é suportado')
+  }
+
+  return {
+    prompt: validatedPrompt,
+    sessionMode: request.sessionMode,
+  }
 }

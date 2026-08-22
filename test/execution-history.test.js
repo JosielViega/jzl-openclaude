@@ -61,15 +61,30 @@ test('registra execution ERROR normalizando somente a mensagem', (t) => {
     missionId: 'mission-0001',
     fromStatus: 'correction',
     error: new Error('falha técnica'),
+    sessionId: null,
   })
 
   assert.deepEqual(created.data, {
     outcome: 'ERROR',
     fromStatus: 'correction',
     toStatus: 'failed',
+    sessionId: null,
     errorMessage: 'falha técnica',
   })
   assert.equal(Object.hasOwn(created.data, 'stack'), false)
+})
+
+test('registra sessionId retornado em execution ERROR', (t) => {
+  const context = createContext(t)
+  const created = recordMissionExecutionError(context, {
+    missionId: 'mission-0001',
+    fromStatus: 'pending',
+    error: new Error('provider falhou'),
+    sessionId: 'session-openclaude',
+  })
+
+  assert.equal(created.data.sessionId, 'session-openclaude')
+  assert.equal(created.data.errorMessage, 'provider falhou')
 })
 
 test('registra validation finished e unavailable', (t) => {

@@ -42,7 +42,10 @@ test('inicia o worker isolado com canais de processo disponíveis', async () => 
 
     assert.equal(result.code, 1)
     assert.equal(result.signal, null)
-    assert.equal(stdout, '')
+    assert.deepEqual(JSON.parse(stdout), {
+      error: 'entrada do worker deve ser JSON válido',
+      sessionId: null,
+    })
     assert.equal(stderr.trim(), 'entrada do worker deve ser JSON válido')
     assert.equal(process.cwd(), parentCwd)
     assert.deepEqual(readdirSync(temporaryDirectory), [])

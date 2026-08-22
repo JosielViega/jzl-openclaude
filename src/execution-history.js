@@ -28,6 +28,7 @@ export function recordMissionExecutionError(context, input) {
       outcome: 'ERROR',
       fromStatus: input.fromStatus,
       toStatus: 'failed',
+      sessionId: input.sessionId,
       errorMessage: errorMessage(input.error),
     },
   })

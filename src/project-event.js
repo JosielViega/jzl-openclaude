@@ -58,6 +58,14 @@ function validateExecutionData(data) {
     if (!isNonEmptyString(data.errorMessage)) {
       throw new Error('errorMessage do evento de execução é inválido')
     }
+
+    if (
+      Object.hasOwn(data, 'sessionId')
+      && data.sessionId !== null
+      && !isNonEmptyString(data.sessionId)
+    ) {
+      throw new Error('sessionId do evento de execução é inválido')
+    }
   }
 }
 

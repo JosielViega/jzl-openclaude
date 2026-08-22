@@ -65,6 +65,25 @@ test('aceita eventos de execução SUCCESS e ERROR', () => {
   assert.strictEqual(validateProjectEvent(error), error)
 })
 
+test('aceita execution ERROR legacy e sessionId string ou null', () => {
+  const legacy = executionError()
+  const identified = executionError({ sessionId: 'session-1' })
+  const unidentified = executionError({ sessionId: null })
+
+  assert.strictEqual(validateProjectEvent(legacy), legacy)
+  assert.strictEqual(validateProjectEvent(identified), identified)
+  assert.strictEqual(validateProjectEvent(unidentified), unidentified)
+})
+
+test('rejeita sessionId inválido em execution ERROR', () => {
+  for (const sessionId of [123, '']) {
+    assert.throws(
+      () => validateProjectEvent(executionError({ sessionId })),
+      { message: 'sessionId do evento de execução é inválido' },
+    )
+  }
+})
+
 test('aceita validation PASS, FAIL e ERROR coerentes', () => {
   for (const [outcome, toStatus] of [
     ['PASS', 'completed'],

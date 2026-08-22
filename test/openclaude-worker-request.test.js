@@ -5,10 +5,10 @@ import { parseOpenClaudeWorkerRequest } from '../src/openclaude-worker-request.j
 
 test('normaliza uma solicitação válida', () => {
   const request = parseOpenClaudeWorkerRequest(
-    JSON.stringify({ prompt: '  JZL_TEST  ' }),
+    JSON.stringify({ prompt: '  JZL_TEST  ', sessionMode: 'fresh' }),
   )
 
-  assert.deepEqual(request, { prompt: 'JZL_TEST' })
+  assert.deepEqual(request, { prompt: 'JZL_TEST', sessionMode: 'fresh' })
 })
 
 const invalidRequestCases = [
@@ -48,6 +48,31 @@ for (const { name, input, expectedError } of invalidRequestCases) {
   test(name, () => {
     assert.throws(
       () => parseOpenClaudeWorkerRequest(input),
+      { message: expectedError },
+    )
+  })
+}
+
+for (const [name, request, expectedError] of [
+  [
+    'rejeita ausência de sessionMode',
+    { prompt: 'teste' },
+    'sessionMode é obrigatório',
+  ],
+  [
+    'rejeita sessionMode que não seja string',
+    { prompt: 'teste', sessionMode: 1 },
+    'sessionMode deve ser uma string',
+  ],
+  [
+    'rejeita sessionMode desconhecido',
+    { prompt: 'teste', sessionMode: 'resume' },
+    'sessionMode do worker não é suportado',
+  ],
+]) {
+  test(name, () => {
+    assert.throws(
+      () => parseOpenClaudeWorkerRequest(JSON.stringify(request)),
       { message: expectedError },
     )
   })

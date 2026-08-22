@@ -40,6 +40,11 @@ const invalidInputCases = [
     input: {
       projectRoot: 'relative/path',
       prompt: 'teste',
+      session: {
+        responsibility: 'mission-execution',
+        mode: 'fresh',
+        missionId: 'mission-0001',
+      },
     },
     expectedError: 'projectRoot deve ser um caminho absoluto',
   },
@@ -53,3 +58,18 @@ for (const { name, input, expectedError } of invalidInputCases) {
     )
   })
 }
+
+test('rejeita descriptor de sessão antes de criar worker', async () => {
+  await assert.rejects(
+    executeOpenClaudeText({
+      projectRoot: 'qualquer-coisa',
+      prompt: 'teste',
+      session: {
+        responsibility: 'mission-execution',
+        mode: 'resume',
+        missionId: 'mission-0001',
+      },
+    }),
+    { message: 'modo da sessão de execução não é suportado' },
+  )
+})
