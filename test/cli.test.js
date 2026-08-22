@@ -1,23 +1,31 @@
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, rmSync } from 'node:fs'
+import {
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, normalize } from 'node:path'
-import { after, before, test } from 'node:test'
+import { test } from 'node:test'
 import { fileURLToPath } from 'node:url'
+
+import { createProjectContext } from '../src/project-context.js'
+import { initializeProjectConfigStore } from '../src/project-config-store.js'
+import {
+  initializeProjectStateStore,
+  writeProjectStateStore,
+} from '../src/project-state-store.js'
 
 const testDirectory = dirname(fileURLToPath(import.meta.url))
 const cliPath = join(testDirectory, '..', 'src', 'cli.js')
 
-let temporaryDirectory
-
-before(() => {
-  temporaryDirectory = mkdtempSync(join(tmpdir(), 'jzl-cli-'))
-})
-
-after(() => {
-  rmSync(temporaryDirectory, { recursive: true, force: true })
-})
+function createRoot(t) {
+  const root = mkdtempSync(join(tmpdir(), 'jzl-cli-'))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  return root
+}
 
 function runCli(argumentsList) {
   return spawnSync(process.execPath, [cliPath, ...argumentsList], {
@@ -25,166 +33,255 @@ function runCli(argumentsList) {
   })
 }
 
-test('valida projectRoot absoluto', () => {
-  const result = runCli(['check-root', '--project-root', temporaryDirectory])
+function runJsonCli(argumentsList) {
+  const result = runCli(argumentsList)
+  assert.equal(result.status, 0, result.stderr)
+  assert.equal(result.signal, null)
+  assert.equal(result.stderr, '')
+  return { result, output: JSON.parse(result.stdout) }
+}
+
+function initProject(root, extraArguments = []) {
+  return runJsonCli([
+    'init-project',
+    '--project-root', root,
+    '--template', 'traditional-web',
+    ...extraArguments,
+  ]).output
+}
+
+function createValidationProject(t, mode) {
+  const root = createRoot(t)
+  const context = createProjectContext(root)
+  const fakePhpPath = join(root, 'fake-php.js')
+  const phpPath = join(root, 'index.php')
+  const mission = {
+    id: 'mission-0001',
+    title: 'Validar PHP',
+    objective: 'Validar sintaxe',
+    status: 'validation',
+    dependencies: [],
+  }
+
+  writeFileSync(fakePhpPath, (
+    "const fs = require('node:fs'); "
+    + "const content = fs.readFileSync(process.argv.at(-1), 'utf8'); "
+    + "if (content.includes('INVALID_PHP_FOR_TEST')) process.exit(1);"
+  ), 'utf8')
+  writeFileSync(
+    phpPath,
+    mode === 'FAIL' ? 'INVALID_PHP_FOR_TEST' : '<?php echo "ok";',
+    'utf8',
+  )
+  initializeProjectStateStore(context)
+  writeProjectStateStore(context, { schemaVersion: 1, missions: [mission] })
+  initializeProjectConfigStore(context, {
+    template: 'traditional-web',
+    tools: {
+      php: {
+        executable: mode === 'ERROR'
+          ? join(root, 'missing-php.exe')
+          : process.execPath,
+        argsPrefix: [fakePhpPath],
+      },
+    },
+  })
+
+  return root
+}
+
+test('check-root preserva saída textual', (t) => {
+  const root = createRoot(t)
+  const result = runCli(['check-root', '--project-root', root])
 
   assert.equal(result.status, 0)
   assert.match(result.stdout, /projectRoot válido/)
-  assert.ok(result.stdout.includes(normalize(temporaryDirectory)))
+  assert.ok(result.stdout.includes(normalize(root)))
   assert.equal(result.stderr, '')
 })
 
-test('rejeita comando ausente', () => {
-  const result = runCli([])
-
-  assert.notEqual(result.status, 0)
-  assert.match(result.stderr, /comando é obrigatório/)
-})
-
-test('rejeita comando desconhecido', () => {
-  const result = runCli(['desconhecido', '--project-root', temporaryDirectory])
-
-  assert.notEqual(result.status, 0)
-  assert.match(result.stderr, /comando desconhecido/)
-})
-
-test('rejeita ausência de --project-root', () => {
-  const result = runCli(['check-root'])
-
-  assert.notEqual(result.status, 0)
-  assert.match(result.stderr, /--project-root é obrigatório/)
-})
-
-test('rejeita --project-root sem valor', () => {
-  const result = runCli(['check-root', '--project-root'])
-
-  assert.notEqual(result.status, 0)
-  assert.match(result.stderr, /exige um valor/)
-})
-
-test('rejeita argumento diferente de --project-root', () => {
-  const result = runCli(['check-root', '--outro', temporaryDirectory])
-
-  assert.notEqual(result.status, 0)
-  assert.match(result.stderr, /argumento desconhecido/)
-})
-
-test('rejeita caminho relativo', () => {
-  const result = runCli(['check-root', '--project-root', 'relative/path'])
-
-  assert.notEqual(result.status, 0)
-  assert.match(result.stderr, /caminho absoluto/)
-})
-
-test('rejeita caminho absoluto inexistente', () => {
-  const missingDirectory = join(temporaryDirectory, 'missing')
-  const result = runCli(['check-root', '--project-root', missingDirectory])
-
-  assert.notEqual(result.status, 0)
-  assert.match(result.stderr, /projectRoot não existe/)
-})
-
-test('rejeita argumento extra após projectRoot', () => {
-  const result = runCli([
-    'check-root',
-    '--project-root',
-    temporaryDirectory,
-    '--extra',
+test('init-project mínimo retorna um único JSON e persiste stores', (t) => {
+  const root = createRoot(t)
+  const { result, output } = runJsonCli([
+    'init-project', '--project-root', root, '--template', 'traditional-web',
   ])
 
-  assert.notEqual(result.status, 0)
-  assert.match(result.stderr, /argumento desconhecido/)
+  assert.deepEqual(output, {
+    projectRoot: root,
+    config: { schemaVersion: 1, template: 'traditional-web', tools: {} },
+    state: { schemaVersion: 1 },
+  })
+  assert.equal(result.stdout.trim().split(/\r?\n/).length, 1)
 })
 
-const invalidRunCases = [
-  {
-    name: 'run rejeita ausência de --project-root',
-    argumentsList: () => ['run'],
-    expectedError: '--project-root é obrigatório',
-  },
-  {
-    name: 'run rejeita primeira flag desconhecida',
-    argumentsList: () => ['run', '--outro'],
-    expectedError: 'argumento desconhecido: --outro',
-  },
-  {
-    name: 'run rejeita --project-root sem valor',
-    argumentsList: () => ['run', '--project-root'],
-    expectedError: '--project-root exige um valor',
-  },
-  {
-    name: 'run rejeita --prompt como valor de --project-root',
-    argumentsList: () => ['run', '--project-root', '--prompt', 'teste'],
-    expectedError: '--project-root exige um valor',
-  },
-  {
-    name: 'run rejeita ausência de --prompt',
-    argumentsList: () => ['run', '--project-root', temporaryDirectory],
-    expectedError: '--prompt é obrigatório',
-  },
-  {
-    name: 'run rejeita flag de prompt desconhecida',
-    argumentsList: () => [
-      'run',
-      '--project-root',
-      temporaryDirectory,
-      '--outro',
-      'teste',
-    ],
-    expectedError: 'argumento desconhecido: --outro',
-  },
-  {
-    name: 'run rejeita --prompt sem valor',
-    argumentsList: () => [
-      'run',
-      '--project-root',
-      temporaryDirectory,
-      '--prompt',
-    ],
-    expectedError: '--prompt exige um valor',
-  },
-  {
-    name: 'run rejeita prompt iniciado por --',
-    argumentsList: () => [
-      'run',
-      '--project-root',
-      temporaryDirectory,
-      '--prompt',
-      '--qualquer',
-    ],
-    expectedError: '--prompt exige um valor',
-  },
-  {
-    name: 'run rejeita argumento extra',
-    argumentsList: () => [
-      'run',
-      '--project-root',
-      temporaryDirectory,
-      '--prompt',
-      'teste',
-      '--extra',
-    ],
-    expectedError: 'argumento desconhecido: --extra',
-  },
-  {
-    name: 'run rejeita prompt vazio',
-    argumentsList: () => [
-      'run',
-      '--project-root',
-      temporaryDirectory,
-      '--prompt',
-      '',
-    ],
-    expectedError: 'prompt não pode ser vazio',
-  },
-]
+test('init-project persiste --php absoluto', (t) => {
+  const root = createRoot(t)
+  const output = initProject(root, ['--php', process.execPath])
 
-for (const { name, argumentsList, expectedError } of invalidRunCases) {
-  test(name, () => {
-    const result = runCli(argumentsList())
+  assert.deepEqual(output.config.tools.php, {
+    executable: process.execPath,
+    argsPrefix: [],
+  })
+  assert.deepEqual(
+    JSON.parse(readFileSync(join(root, '.jzl', 'config.json'), 'utf8')),
+    output.config,
+  )
+})
 
-    assert.notEqual(result.status, 0)
+test('create-mission retorna Mission criada', (t) => {
+  const root = createRoot(t)
+  initProject(root)
+  const { output } = runJsonCli([
+    'create-mission', '--project-root', root,
+    '--title', 'Mission A', '--objective', 'Executar A',
+  ])
+
+  assert.deepEqual(output, {
+    id: 'mission-0001',
+    title: 'Mission A',
+    objective: 'Executar A',
+    status: 'pending',
+    dependencies: [],
+  })
+})
+
+test('create-mission aceita --depends-on repetido e preserva ordem', (t) => {
+  const root = createRoot(t)
+  initProject(root)
+  runJsonCli(['create-mission', '--project-root', root, '--title', 'A', '--objective', 'A'])
+  runJsonCli(['create-mission', '--project-root', root, '--title', 'B', '--objective', 'B'])
+  const { output } = runJsonCli([
+    'create-mission', '--project-root', root,
+    '--title', 'C', '--objective', 'C',
+    '--depends-on', 'mission-0002',
+    '--depends-on', 'mission-0001',
+  ])
+
+  assert.deepEqual(output.dependencies, ['mission-0002', 'mission-0001'])
+})
+
+test('list-ready retorna somente Missions prontas sem persistir ready', (t) => {
+  const root = createRoot(t)
+  initProject(root)
+  const first = runJsonCli([
+    'create-mission', '--project-root', root, '--title', 'A', '--objective', 'A',
+  ]).output
+  runJsonCli([
+    'create-mission', '--project-root', root, '--title', 'B', '--objective', 'B',
+    '--depends-on', first.id,
+  ])
+  const { output } = runJsonCli(['list-ready', '--project-root', root])
+
+  assert.deepEqual(output.missions.map(({ id }) => id), [first.id])
+  assert.equal(readFileSync(join(root, '.jzl', 'state.json'), 'utf8').includes('ready'), false)
+})
+
+for (const mode of ['PASS', 'FAIL', 'ERROR']) {
+  test(`validate-mission retorna outcome ${mode} com exit code zero`, (t) => {
+    const root = createValidationProject(t, mode)
+    const { result, output } = runJsonCli([
+      'validate-mission', '--project-root', root, '--mission', 'mission-0001',
+    ])
+    const expectedMissionStatus = {
+      PASS: 'completed',
+      FAIL: 'correction',
+      ERROR: 'validation',
+    }[mode]
+
+    assert.equal(result.status, 0)
+    assert.equal(output.validation.status, mode)
+    assert.equal(output.mission.status, expectedMissionStatus)
+  })
+}
+
+test('execute-mission bloqueada falha antes de OpenClaude', (t) => {
+  const root = createRoot(t)
+  initProject(root)
+  const first = runJsonCli([
+    'create-mission', '--project-root', root, '--title', 'A', '--objective', 'A',
+  ]).output
+  const second = runJsonCli([
+    'create-mission', '--project-root', root, '--title', 'B', '--objective', 'B',
+    '--depends-on', first.id,
+  ]).output
+  const result = runCli([
+    'execute-mission', '--project-root', root, '--mission', second.id,
+  ])
+
+  assert.equal(result.status, 1)
+  assert.equal(result.stdout, '')
+  assert.equal(result.stderr.trim(), 'Mission não está pronta para iniciar')
+})
+
+test('run-mission bloqueada falha antes de OpenClaude', (t) => {
+  const root = createRoot(t)
+  initProject(root)
+  const first = runJsonCli([
+    'create-mission', '--project-root', root, '--title', 'A', '--objective', 'A',
+  ]).output
+  const second = runJsonCli([
+    'create-mission', '--project-root', root, '--title', 'B', '--objective', 'B',
+    '--depends-on', first.id,
+  ]).output
+  const result = runCli([
+    'run-mission', '--project-root', root, '--mission', second.id,
+  ])
+
+  assert.equal(result.status, 1)
+  assert.equal(result.stdout, '')
+  assert.equal(result.stderr.trim(), 'Mission não está pronta para iniciar')
+})
+
+test('run-mission completed rejeita antes de OpenClaude', (t) => {
+  const root = createRoot(t)
+  const context = createProjectContext(root)
+  initializeProjectStateStore(context)
+  writeProjectStateStore(context, {
+    schemaVersion: 1,
+    missions: [{
+      id: 'mission-0001',
+      title: 'A',
+      objective: 'A',
+      status: 'completed',
+      dependencies: [],
+    }],
+  })
+  const result = runCli([
+    'run-mission', '--project-root', root, '--mission', 'mission-0001',
+  ])
+
+  assert.equal(result.status, 1)
+  assert.equal(result.stdout, '')
+  assert.equal(result.stderr.trim(), 'Mission não pode ser executada no status atual')
+})
+
+test('run raw é comando desconhecido e não aceita prompt livre', (t) => {
+  const root = createRoot(t)
+  const result = runCli([
+    'run', '--project-root', root, '--prompt', 'prompt livre',
+  ])
+
+  assert.equal(result.status, 1)
+  assert.equal(result.stdout, '')
+  assert.equal(result.stderr.trim(), 'comando desconhecido: run')
+})
+
+for (const [name, argumentsList, message] of [
+  ['comando ausente', [], 'comando é obrigatório'],
+  ['projectRoot ausente', ['list-ready'], '--project-root é obrigatório'],
+  ['template ausente', ['init-project', '--project-root', 'root'], '--template é obrigatório'],
+  ['title ausente', ['create-mission', '--project-root', 'root'], '--title é obrigatório'],
+  ['objective ausente', ['create-mission', '--project-root', 'root', '--title', 'A'], '--objective é obrigatório'],
+  ['mission ausente', ['validate-mission', '--project-root', 'root'], '--mission é obrigatório'],
+  ['valor ausente', ['list-ready', '--project-root'], '--project-root exige um valor'],
+  ['valor iniciado por flag', ['list-ready', '--project-root', '--other'], '--project-root exige um valor'],
+  ['flag desconhecida', ['list-ready', '--project-root', 'root', '--other', 'x'], 'argumento desconhecido: --other'],
+  ['flag singular duplicada', ['list-ready', '--project-root', 'a', '--project-root', 'b'], 'opção duplicada: --project-root'],
+]) {
+  test(`CLI rejeita ${name}`, () => {
+    const result = runCli(argumentsList)
+    assert.equal(result.status, 1)
     assert.equal(result.stdout, '')
-    assert.equal(result.stderr.trim(), expectedError)
+    assert.equal(result.stderr.trim(), message)
   })
 }

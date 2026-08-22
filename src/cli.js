@@ -1,5 +1,26 @@
-import { executeOpenClaudeText } from './openclaude-execution-adapter.js'
+import { parseCliOptions } from './cli-options.js'
+import { initializeManagedProject } from './managed-project.js'
+import {
+  createProjectMission,
+  listReadyProjectMissions,
+} from './mission-engine.js'
+import { executeProjectMission } from './mission-execution.js'
+import { validateConfiguredProjectMission } from './mission-validation.js'
+import { createProjectContext } from './project-context.js'
 import { validateProjectRoot } from './project-root.js'
+import { runProjectMission } from './project-runner.js'
+
+const projectRootOption = {
+  '--project-root': { required: true },
+}
+
+function printJson(value) {
+  console.log(JSON.stringify(value))
+}
+
+function createContext(options) {
+  return createProjectContext(options['--project-root'])
+}
 
 const [command, ...argumentsList] = process.argv.slice(2)
 
@@ -9,70 +30,71 @@ try {
   }
 
   if (command === 'check-root') {
-    const [option, projectRoot, ...extraArguments] = argumentsList
+    const options = parseCliOptions(argumentsList, projectRootOption)
+    const projectRoot = validateProjectRoot(options['--project-root'])
 
-    if (option === undefined) {
-      throw new Error('--project-root é obrigatório')
-    }
+    console.log(`projectRoot válido: ${projectRoot}`)
+  } else if (command === 'init-project') {
+    const options = parseCliOptions(argumentsList, {
+      ...projectRootOption,
+      '--template': { required: true },
+      '--php': {},
+    })
+    const tools = options['--php'] === undefined
+      ? undefined
+      : { php: { executable: options['--php'], argsPrefix: [] } }
 
-    if (option !== '--project-root') {
-      throw new Error(`argumento desconhecido: ${option}`)
-    }
-
-    if (projectRoot === undefined || projectRoot.startsWith('--')) {
-      throw new Error('--project-root exige um valor')
-    }
-
-    if (extraArguments.length > 0) {
-      throw new Error(`argumento desconhecido: ${extraArguments[0]}`)
-    }
-
-    const validatedProjectRoot = validateProjectRoot(projectRoot)
-
-    console.log(`projectRoot válido: ${validatedProjectRoot}`)
-  } else if (command === 'run') {
-    const [
-      projectRootOption,
-      projectRoot,
-      promptOption,
-      prompt,
-      ...extraArguments
-    ] = argumentsList
-
-    if (projectRootOption === undefined) {
-      throw new Error('--project-root é obrigatório')
-    }
-
-    if (projectRootOption !== '--project-root') {
-      throw new Error(`argumento desconhecido: ${projectRootOption}`)
-    }
-
-    if (projectRoot === undefined || projectRoot.startsWith('--')) {
-      throw new Error('--project-root exige um valor')
-    }
-
-    if (promptOption === undefined) {
-      throw new Error('--prompt é obrigatório')
-    }
-
-    if (promptOption !== '--prompt') {
-      throw new Error(`argumento desconhecido: ${promptOption}`)
-    }
-
-    if (prompt === undefined || prompt.startsWith('--')) {
-      throw new Error('--prompt exige um valor')
-    }
-
-    if (extraArguments.length > 0) {
-      throw new Error(`argumento desconhecido: ${extraArguments[0]}`)
-    }
-
-    const execution = await executeOpenClaudeText({
-      projectRoot,
-      prompt,
+    printJson(initializeManagedProject(createContext(options), {
+      template: options['--template'],
+      ...(tools === undefined ? {} : { tools }),
+    }))
+  } else if (command === 'create-mission') {
+    const options = parseCliOptions(argumentsList, {
+      ...projectRootOption,
+      '--title': { required: true },
+      '--objective': { required: true },
+      '--depends-on': { repeatable: true },
     })
 
-    console.log(JSON.stringify(execution))
+    printJson(createProjectMission(createContext(options), {
+      title: options['--title'],
+      objective: options['--objective'],
+      dependencies: options['--depends-on'],
+    }))
+  } else if (command === 'list-ready') {
+    const options = parseCliOptions(argumentsList, projectRootOption)
+
+    printJson({ missions: listReadyProjectMissions(createContext(options)) })
+  } else if (command === 'execute-mission') {
+    const options = parseCliOptions(argumentsList, {
+      ...projectRootOption,
+      '--mission': { required: true },
+    })
+
+    printJson(await executeProjectMission(
+      createContext(options),
+      options['--mission'],
+    ))
+  } else if (command === 'validate-mission') {
+    const options = parseCliOptions(argumentsList, {
+      ...projectRootOption,
+      '--mission': { required: true },
+    })
+
+    printJson(await validateConfiguredProjectMission(
+      createContext(options),
+      options['--mission'],
+    ))
+  } else if (command === 'run-mission') {
+    const options = parseCliOptions(argumentsList, {
+      ...projectRootOption,
+      '--mission': { required: true },
+    })
+
+    printJson(await runProjectMission(
+      createContext(options),
+      options['--mission'],
+    ))
   } else {
     throw new Error(`comando desconhecido: ${command}`)
   }
