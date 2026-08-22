@@ -1,5 +1,9 @@
 import { executeOpenClaudeText } from './openclaude-execution-adapter.js'
 import {
+  buildMissionExecutionContext,
+  resolveMissionCorrectionFeedback,
+} from './context-builder.js'
+import {
   recordMissionExecutionError,
   recordMissionExecutionSuccess,
 } from './execution-history.js'
@@ -41,14 +45,22 @@ function persistTechnicalFailure(context, missionId, fromStatus, executionError)
 export async function executeProjectMission(context, missionId) {
   const initialMission = getProjectMission(context, missionId)
   const fromStatus = initialMission.status
+  const correctionFeedback = fromStatus === 'correction'
+    ? resolveMissionCorrectionFeedback(context, missionId)
+    : null
   const runningMission = prepareProjectMissionExecution(context, missionId)
   let prompt
   let execution
 
   try {
     const standards = resolveProjectStandards(context)
+    const executionContext = buildMissionExecutionContext(context, {
+      mission: runningMission,
+      standards,
+      correctionFeedback,
+    })
 
-    prompt = buildMissionExecutionPrompt(runningMission, standards)
+    prompt = buildMissionExecutionPrompt(executionContext)
     execution = await executeOpenClaudeText({
       projectRoot: context.projectRoot,
       prompt,
