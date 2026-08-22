@@ -5,6 +5,7 @@ import {
   submitProjectMissionForValidation,
 } from './mission-engine.js'
 import { buildMissionExecutionPrompt } from './mission-execution-prompt.js'
+import { resolveProjectStandards } from './standards-resolver.js'
 
 function persistTechnicalFailure(context, missionId, executionError) {
   try {
@@ -25,7 +26,9 @@ export async function executeProjectMission(context, missionId) {
   let execution
 
   try {
-    prompt = buildMissionExecutionPrompt(runningMission)
+    const standards = resolveProjectStandards(context)
+
+    prompt = buildMissionExecutionPrompt(runningMission, standards)
     execution = await executeOpenClaudeText({
       projectRoot: context.projectRoot,
       prompt,

@@ -4,6 +4,7 @@ import {
   requestProjectMissionCorrection,
 } from './mission-engine.js'
 import { runProjectValidators } from './validator-engine.js'
+import { resolveProjectValidators } from './standards-resolver.js'
 
 export async function validateProjectMission(context, missionId, validators) {
   const mission = getProjectMission(context, missionId)
@@ -32,4 +33,16 @@ export async function validateProjectMission(context, missionId, validators) {
     mission: getProjectMission(context, missionId),
     validation,
   }
+}
+
+export async function validateConfiguredProjectMission(context, missionId) {
+  const mission = getProjectMission(context, missionId)
+
+  if (mission.status !== 'validation') {
+    throw new Error('Mission deve estar validation para validação')
+  }
+
+  const validators = resolveProjectValidators(context)
+
+  return validateProjectMission(context, missionId, validators)
 }

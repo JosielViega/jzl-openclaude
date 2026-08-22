@@ -1,12 +1,23 @@
 import assert from 'node:assert/strict'
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 
 import { createProjectContext } from '../src/project-context.js'
+import { initializeProjectConfigStore } from '../src/project-config-store.js'
 import { listReadyProjectMissions } from '../src/mission-engine.js'
-import { validateProjectMission } from '../src/mission-validation.js'
+import {
+  validateConfiguredProjectMission,
+  validateProjectMission,
+} from '../src/mission-validation.js'
 import {
   initializeProjectStateStore,
   readProjectStateStore,
@@ -85,6 +96,38 @@ function assertEvidenceNotPersisted(state) {
   for (const field of ['ready', 'readyMissions', 'currentMission', 'nextMission']) {
     assert.equal(Object.hasOwn(state, field), false)
   }
+}
+
+function initializeConfiguredValidation(
+  context,
+  projectRoot,
+  missions,
+  { invalidMarker, executable = process.execPath } = {},
+) {
+  const fakePhpPath = join(projectRoot, 'fake-php.js')
+  const markerCheck = invalidMarker === undefined
+    ? ''
+    : `if (content.includes(${JSON.stringify(invalidMarker)})) process.exit(1);`
+  const script = (
+    "const fs = require('node:fs'); "
+    + "const target = process.argv.at(-1); "
+    + "const content = fs.readFileSync(target, 'utf8'); "
+    + markerCheck
+  )
+
+  writeFileSync(fakePhpPath, script, 'utf8')
+  initializeMissions(context, missions)
+  initializeProjectConfigStore(context, {
+    template: 'traditional-web',
+    tools: {
+      php: {
+        executable,
+        argsPrefix: [fakePhpPath],
+      },
+    },
+  })
+
+  return fakePhpPath
 }
 
 test('PASS conclui Mission, preserva campos e libera dependente', async (t) => {
@@ -277,4 +320,161 @@ test('ERROR prevalece sobre FAIL e mantém Mission em validation', async (t) => 
   )
   assert.equal(result.mission.status, 'validation')
   assert.equal(readProjectStateStore(context).missions[0].status, 'validation')
+})
+
+test('validação configurada PHP PASS conclui e libera dependente', async (t) => {
+  const { context, projectRoot } = createTemporaryContext(t)
+  const missionA = createMission('mission-0001')
+  const missionB = createMission('mission-0002', 'pending', {
+    dependencies: [missionA.id],
+  })
+  writeFileSync(join(projectRoot, 'index.php'), '<?php echo "ok";', 'utf8')
+  initializeConfiguredValidation(context, projectRoot, [missionA, missionB])
+
+  const result = await validateConfiguredProjectMission(context, missionA.id)
+  const state = readProjectStateStore(context)
+
+  assert.equal(result.validation.status, 'PASS')
+  assert.equal(result.mission.status, 'completed')
+  assert.deepEqual(listReadyProjectMissions(context).map(({ id }) => id), [missionB.id])
+  assertEvidenceNotPersisted(state)
+})
+
+test('validação configurada PHP FAIL solicita correction e bloqueia dependente', async (t) => {
+  const { context, projectRoot } = createTemporaryContext(t)
+  const missionA = createMission('mission-0001')
+  const missionB = createMission('mission-0002', 'pending', {
+    dependencies: [missionA.id],
+  })
+  writeFileSync(join(projectRoot, 'index.php'), 'INVALID_PHP_FOR_TEST', 'utf8')
+  initializeConfiguredValidation(context, projectRoot, [missionA, missionB], {
+    invalidMarker: 'INVALID_PHP_FOR_TEST',
+  })
+
+  const result = await validateConfiguredProjectMission(context, missionA.id)
+  const state = readProjectStateStore(context)
+
+  assert.equal(result.validation.status, 'FAIL')
+  assert.equal(result.mission.status, 'correction')
+  assert.deepEqual(listReadyProjectMissions(context), [])
+  assertEvidenceNotPersisted(state)
+})
+
+test('validação configurada PHP ERROR mantém Mission validation', async (t) => {
+  const { context, projectRoot } = createTemporaryContext(t)
+  const mission = createMission('mission-0001')
+  const dependent = createMission('mission-0002', 'pending', {
+    dependencies: [mission.id],
+  })
+  writeFileSync(join(projectRoot, 'index.php'), '<?php', 'utf8')
+  initializeConfiguredValidation(context, projectRoot, [mission, dependent], {
+    executable: join(projectRoot, 'missing-php.exe'),
+  })
+
+  const result = await validateConfiguredProjectMission(context, mission.id)
+
+  assert.equal(result.validation.status, 'ERROR')
+  assert.equal(result.mission.status, 'validation')
+  assert.deepEqual(listReadyProjectMissions(context), [])
+  assertEvidenceNotPersisted(readProjectStateStore(context))
+})
+
+test('validação configurada executa todos os PHP de primeira parte', async (t) => {
+  const { context, projectRoot } = createTemporaryContext(t)
+  const mission = createMission('mission-0001')
+  const logPath = join(projectRoot, 'executed.txt')
+  const fakePhpPath = join(projectRoot, 'fake-php.js')
+  writeFileSync(join(projectRoot, 'a.php'), '<?php', 'utf8')
+  writeFileSync(join(projectRoot, 'b.php'), '<?php', 'utf8')
+  initializeMissions(context, [mission])
+  writeFileSync(fakePhpPath, (
+    "const fs = require('node:fs'); const path = require('node:path'); "
+    + `fs.appendFileSync(${JSON.stringify(logPath)}, path.basename(process.argv.at(-1)) + '\\n');`
+  ), 'utf8')
+  initializeProjectConfigStore(context, {
+    template: 'traditional-web',
+    tools: { php: { executable: process.execPath, argsPrefix: [fakePhpPath] } },
+  })
+
+  const result = await validateConfiguredProjectMission(context, mission.id)
+
+  assert.equal(result.validation.status, 'PASS')
+  assert.deepEqual(readFileSync(logPath, 'utf8').trim().split(/\r?\n/), ['a.php', 'b.php'])
+})
+
+test('PHP inválido dentro de vendor é ignorado', async (t) => {
+  const { context, projectRoot } = createTemporaryContext(t)
+  const mission = createMission('mission-0001')
+  writeFileSync(join(projectRoot, 'index.php'), '<?php', 'utf8')
+  const vendor = join(projectRoot, 'vendor')
+  mkdirSync(vendor)
+  writeFileSync(join(vendor, 'invalid.php'), 'INVALID_PHP_FOR_TEST', 'utf8')
+  initializeConfiguredValidation(context, projectRoot, [mission], {
+    invalidMarker: 'INVALID_PHP_FOR_TEST',
+  })
+
+  const result = await validateConfiguredProjectMission(context, mission.id)
+  assert.equal(result.validation.status, 'PASS')
+})
+
+test('PHP sem configuração mantém Mission validation', async (t) => {
+  const { context, projectRoot } = createTemporaryContext(t)
+  const mission = createMission('mission-0001')
+  writeFileSync(join(projectRoot, 'index.php'), '<?php', 'utf8')
+  initializeMissions(context, [mission])
+  initializeProjectConfigStore(context, { template: 'traditional-web' })
+
+  await assert.rejects(validateConfiguredProjectMission(context, mission.id), {
+    message: 'executable PHP não configurado para traditional-web',
+  })
+  assert.equal(readProjectStateStore(context).missions[0].status, 'validation')
+})
+
+test('zero PHP propaga exigência de validator e mantém Mission validation', async (t) => {
+  const { context, projectRoot } = createTemporaryContext(t)
+  const mission = createMission('mission-0001')
+  initializeConfiguredValidation(context, projectRoot, [mission])
+
+  await assert.rejects(validateConfiguredProjectMission(context, mission.id), {
+    message: 'ao menos um validator é obrigatório',
+  })
+  assert.equal(readProjectStateStore(context).missions[0].status, 'validation')
+})
+
+test('status errado precede resolução de config na validação configurada', async (t) => {
+  const { context } = createTemporaryContext(t)
+  const mission = createMission('mission-0001', 'pending')
+  initializeMissions(context, [mission])
+
+  await assert.rejects(validateConfiguredProjectMission(context, mission.id), {
+    message: 'Mission deve estar validation para validação',
+  })
+  assert.deepEqual(readProjectStateStore(context).missions, [mission])
+})
+
+test('config ausente não altera Mission validation', async (t) => {
+  const { context } = createTemporaryContext(t)
+  const mission = createMission('mission-0001')
+  initializeMissions(context, [mission])
+
+  await assert.rejects(validateConfiguredProjectMission(context, mission.id), {
+    message: 'arquivo de configuração do projeto não existe',
+  })
+  assert.deepEqual(readProjectStateStore(context).missions, [mission])
+})
+
+test('config inválida não altera Mission validation', async (t) => {
+  const { context, projectRoot } = createTemporaryContext(t)
+  const mission = createMission('mission-0001')
+  initializeMissions(context, [mission])
+  writeFileSync(join(projectRoot, '.jzl', 'config.json'), JSON.stringify({
+    schemaVersion: 2,
+    template: 'traditional-web',
+    tools: {},
+  }), 'utf8')
+
+  await assert.rejects(validateConfiguredProjectMission(context, mission.id), {
+    message: 'schemaVersion da configuração do projeto não é suportado',
+  })
+  assert.deepEqual(readProjectStateStore(context).missions, [mission])
 })

@@ -87,3 +87,17 @@ test('rejeita statuses não executáveis sem reescrever estado', async (t) => {
     assert.deepEqual(readProjectStateStore(context), state)
   }
 })
+
+test('config ausente falha Mission running antes de executar OpenClaude', async (t) => {
+  const context = createTemporaryContext(t)
+  initializeProjectStateStore(context)
+  const mission = createProjectMission(context, {
+    title: 'A',
+    objective: 'Executar A',
+  })
+
+  await assert.rejects(executeProjectMission(context, mission.id), {
+    message: 'arquivo de configuração do projeto não existe',
+  })
+  assert.equal(readProjectStateStore(context).missions[0].status, 'failed')
+})
