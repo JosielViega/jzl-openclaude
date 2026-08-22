@@ -332,6 +332,10 @@ export function prepareMissionExecution(existingMissions, missionId) {
   throw new Error('Mission não pode ser executada no status atual')
 }
 
+export function getMissionById(existingMissions, missionId) {
+  return getMissionForTransition(existingMissions, missionId).mission
+}
+
 export function listReadyMissions(existingMissions) {
   validateExistingMissions(existingMissions)
 

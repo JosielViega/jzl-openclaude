@@ -14,6 +14,7 @@ import {
   completeProjectMission,
   createProjectMission,
   failProjectMission,
+  getProjectMission,
   listReadyProjectMissions,
   prepareProjectMissionExecution,
   requestProjectMissionCorrection,
@@ -698,4 +699,40 @@ test('preparação inválida não reescreve o State Store', (t) => {
     )
     assert.equal(readFileSync(statePath, 'utf8'), originalContent)
   }
+})
+
+test('consulta Mission persistida sem reescrever o State Store', (t) => {
+  const { context, projectRoot } = createTemporaryProject(t)
+
+  initializeProjectStateStore(context)
+  const mission = createProjectMission(context, {
+    title: 'A',
+    objective: 'Executar A',
+  })
+  const statePath = join(projectRoot, '.jzl', 'state.json')
+  const originalContent = readFileSync(statePath, 'utf8')
+
+  assert.deepEqual(getProjectMission(context, mission.id), mission)
+  assert.equal(readFileSync(statePath, 'utf8'), originalContent)
+})
+
+test('consulta rejeita Mission ausente e estado inconsistente', (t) => {
+  const { context } = createTemporaryProject(t)
+
+  initializeProjectStateStore(context)
+
+  assert.throws(
+    () => getProjectMission(context, 'mission-0001'),
+    { message: 'Mission não existe' },
+  )
+
+  writeProjectStateStore(context, {
+    schemaVersion: 1,
+    missions: {},
+  })
+
+  assert.throws(
+    () => getProjectMission(context, 'mission-0001'),
+    { message: 'missions do estado do projeto deve ser um array' },
+  )
 })

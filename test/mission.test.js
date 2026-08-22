@@ -5,6 +5,7 @@ import {
   completeMission,
   createMission,
   failMission,
+  getMissionById,
   isMissionReady,
   listReadyMissions,
   prepareMissionExecution,
@@ -849,4 +850,34 @@ test('preparação falha fechada quando dependency não está completed', () => 
     )
     assert.equal(mission.status, status)
   }
+})
+
+test('consulta Mission existente pela mesma referência sem mutação', () => {
+  const mission = createValidMission()
+  const existingMissions = [mission]
+  const snapshot = structuredClone(existingMissions)
+
+  assert.strictEqual(getMissionById(existingMissions, mission.id), mission)
+  assert.deepEqual(existingMissions, snapshot)
+})
+
+test('consulta de Mission valida coleção, alvo e dependências', () => {
+  const mission = createValidMission()
+  const missingDependency = createValidMission({
+    id: 'mission-0002',
+    dependencies: ['mission-9999'],
+  })
+
+  assert.throws(
+    () => getMissionById([mission], 'mission-9999'),
+    { message: 'Mission não existe' },
+  )
+  assert.throws(
+    () => getMissionById([mission, { ...mission }], mission.id),
+    { message: 'ids das Missions existentes não podem ser duplicados' },
+  )
+  assert.throws(
+    () => getMissionById([missingDependency], missingDependency.id),
+    { message: 'dependência da Mission não existe' },
+  )
 })

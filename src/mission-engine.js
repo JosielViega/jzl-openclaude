@@ -2,6 +2,7 @@ import {
   completeMission,
   createMission,
   failMission,
+  getMissionById,
   listReadyMissions,
   prepareMissionExecution,
   requestMissionCorrection,
@@ -49,6 +50,13 @@ export function listReadyProjectMissions(context) {
   const existingMissions = getProjectStateMissions(state)
 
   return listReadyMissions(existingMissions)
+}
+
+export function getProjectMission(context, missionId) {
+  const state = readProjectStateStore(context)
+  const existingMissions = getProjectStateMissions(state)
+
+  return getMissionById(existingMissions, missionId)
 }
 
 function applyProjectMissionTransition(context, missionId, transition) {
