@@ -5,10 +5,18 @@ import { parseOpenClaudeWorkerRequest } from '../src/openclaude-worker-request.j
 
 test('normaliza uma solicitação válida', () => {
   const request = parseOpenClaudeWorkerRequest(
-    JSON.stringify({ prompt: '  JZL_TEST  ', sessionMode: 'fresh' }),
+    JSON.stringify({
+      prompt: '  JZL_TEST  ',
+      sessionMode: 'fresh',
+      responsibility: 'mission-execution',
+    }),
   )
 
-  assert.deepEqual(request, { prompt: 'JZL_TEST', sessionMode: 'fresh' })
+  assert.deepEqual(request, {
+    prompt: 'JZL_TEST',
+    sessionMode: 'fresh',
+    responsibility: 'mission-execution',
+  })
 })
 
 const invalidRequestCases = [
@@ -74,6 +82,29 @@ for (const [name, request, expectedError] of [
     assert.throws(
       () => parseOpenClaudeWorkerRequest(JSON.stringify(request)),
       { message: expectedError },
+    )
+  })
+}
+
+test('aceita responsibility mission-review', () => {
+  assert.deepEqual(parseOpenClaudeWorkerRequest(JSON.stringify({
+    prompt: 'revisar', sessionMode: 'fresh', responsibility: 'mission-review',
+  })), {
+    prompt: 'revisar', sessionMode: 'fresh', responsibility: 'mission-review',
+  })
+})
+
+for (const [name, responsibility, message] of [
+  ['ausente', undefined, 'responsibility é obrigatório'],
+  ['não string', 1, 'responsibility deve ser uma string'],
+  ['desconhecida', 'other', 'responsibility do worker não é suportada'],
+]) {
+  test(`rejeita responsibility ${name}`, () => {
+    const request = { prompt: 'teste', sessionMode: 'fresh' }
+    if (responsibility !== undefined) request.responsibility = responsibility
+    assert.throws(
+      () => parseOpenClaudeWorkerRequest(JSON.stringify(request)),
+      { message },
     )
   })
 }

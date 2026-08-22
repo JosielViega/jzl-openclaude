@@ -41,8 +41,21 @@ export function parseOpenClaudeWorkerRequest(input) {
     throw new Error('sessionMode do worker não é suportado')
   }
 
+  if (!Object.hasOwn(request, 'responsibility')) {
+    throw new Error('responsibility é obrigatório')
+  }
+
+  if (typeof request.responsibility !== 'string') {
+    throw new Error('responsibility deve ser uma string')
+  }
+
+  if (!['mission-execution', 'mission-review'].includes(request.responsibility)) {
+    throw new Error('responsibility do worker não é suportada')
+  }
+
   return {
     prompt: validatedPrompt,
     sessionMode: request.sessionMode,
+    responsibility: request.responsibility,
   }
 }

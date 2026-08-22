@@ -8,7 +8,10 @@ import {
   toProjectPath,
 } from './project-path.js'
 
-const allowedTools = new Set(['Read', 'Glob', 'Grep', 'Write', 'Edit'])
+const allowedToolsByResponsibility = new Map([
+  ['mission-execution', new Set(['Read', 'Glob', 'Grep', 'Write', 'Edit'])],
+  ['mission-review', new Set(['Read', 'Glob', 'Grep'])],
+])
 const protectedDirectoryNames = new Set(['.jzl', '.git', '.openclaude'])
 
 function deny(message) {
@@ -146,7 +149,13 @@ function resolveSearchBase(context, path, requireDirectory) {
   return targetPath
 }
 
-export function createOpenClaudeToolPolicy(projectRoot) {
+export function createOpenClaudeToolPolicy(projectRoot, responsibility) {
+  const allowedTools = allowedToolsByResponsibility.get(responsibility)
+
+  if (allowedTools === undefined) {
+    throw new Error('responsabilidade OpenClaude não é suportada')
+  }
+
   const context = createProjectContext(projectRoot)
   const protectedPaths = collectCanonicalProtectedPaths(context)
 

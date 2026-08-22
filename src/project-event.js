@@ -1,9 +1,13 @@
+import { validateMissionReviewResult } from './mission-review-result.js'
+
 const eventIdPattern = /^event-\d{6,}$/
 const missionIdPattern = /^mission-\d{4,}$/
 const supportedTypes = new Set([
   'mission.execution.finished',
   'mission.validation.finished',
   'mission.validation.unavailable',
+  'mission.review.finished',
+  'mission.review.unavailable',
 ])
 const executionFromStatuses = new Set(['pending', 'failed', 'correction'])
 const validationOutcomes = new Set(['PASS', 'FAIL', 'ERROR'])
@@ -148,6 +152,28 @@ function validateUnavailableData(data) {
   }
 }
 
+function validateReviewFinishedData(data) {
+  if (!isNonEmptyString(data.sessionId)) {
+    throw new Error('sessionId do evento de revisão é inválido')
+  }
+
+  validateMissionReviewResult({
+    verdict: data.verdict,
+    summary: data.summary,
+    findings: data.findings,
+  })
+}
+
+function validateReviewUnavailableData(data) {
+  if (data.sessionId !== null && !isNonEmptyString(data.sessionId)) {
+    throw new Error('sessionId do evento de revisão é inválido')
+  }
+
+  if (!isNonEmptyString(data.errorMessage)) {
+    throw new Error('errorMessage do evento de revisão é inválido')
+  }
+}
+
 export function validateProjectEvent(event) {
   if (!isObject(event)) {
     throw new Error('evento deve ser um objeto')
@@ -201,8 +227,12 @@ export function validateProjectEvent(event) {
     validateExecutionData(event.data)
   } else if (event.type === 'mission.validation.finished') {
     validateValidationData(event.data)
-  } else {
+  } else if (event.type === 'mission.validation.unavailable') {
     validateUnavailableData(event.data)
+  } else if (event.type === 'mission.review.finished') {
+    validateReviewFinishedData(event.data)
+  } else {
+    validateReviewUnavailableData(event.data)
   }
 
   return event

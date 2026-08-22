@@ -13,9 +13,13 @@ import { fileURLToPath } from 'node:url'
 
 import { createProjectContext } from '../src/project-context.js'
 import { initializeProjectConfigStore } from '../src/project-config-store.js'
-import { appendProjectEvent } from '../src/project-event-store.js'
+import {
+  appendProjectEvent,
+  readProjectEventStore,
+} from '../src/project-event-store.js'
 import {
   initializeProjectStateStore,
+  readProjectStateStore,
   writeProjectStateStore,
 } from '../src/project-state-store.js'
 
@@ -331,6 +335,74 @@ for (const [name, argumentsList, message] of [
     assert.equal(result.stderr.trim(), message)
   })
 }
+
+test('review-mission exige flags e rejeita opções inválidas', () => {
+  for (const [argumentsList, message] of [
+    [['review-mission', '--mission', 'mission-0001'], '--project-root é obrigatório'],
+    [['review-mission', '--project-root', 'root'], '--mission é obrigatório'],
+    [[
+      'review-mission', '--project-root', 'root',
+      '--mission', 'mission-0001', '--other', 'x',
+    ], 'argumento desconhecido: --other'],
+    [[
+      'review-mission', '--project-root', 'root', '--mission', 'mission-0001',
+      '--mission', 'mission-0002',
+    ], 'opção duplicada: --mission'],
+  ]) {
+    const result = runCli(argumentsList)
+    assert.equal(result.status, 1)
+    assert.equal(result.stdout, '')
+    assert.equal(result.stderr.trim(), message)
+  }
+})
+
+for (const status of ['pending', 'completed']) {
+  test(`review-mission rejeita Mission ${status} antes do modelo`, (t) => {
+    const root = createRoot(t)
+    const context = createProjectContext(root)
+    initializeProjectStateStore(context)
+    writeProjectStateStore(context, {
+      schemaVersion: 1,
+      missions: [{
+        id: 'mission-0001', title: 'A', objective: 'A', status, dependencies: [],
+      }],
+    })
+
+    const result = runCli([
+      'review-mission', '--project-root', root, '--mission', 'mission-0001',
+    ])
+
+    assert.equal(result.status, 1)
+    assert.equal(result.stdout, '')
+    assert.equal(result.stderr.trim(), 'Mission deve estar validation para revisão')
+    assert.equal(readProjectStateStore(context).missions[0].status, status)
+  })
+}
+
+test('review-mission registra unavailable quando Config está ausente', (t) => {
+  const root = createRoot(t)
+  const context = createProjectContext(root)
+  initializeProjectStateStore(context)
+  writeProjectStateStore(context, {
+    schemaVersion: 1,
+    missions: [{
+      id: 'mission-0001', title: 'A', objective: 'A',
+      status: 'validation', dependencies: [],
+    }],
+  })
+
+  const result = runCli([
+    'review-mission', '--project-root', root, '--mission', 'mission-0001',
+  ])
+
+  assert.equal(result.status, 1)
+  assert.equal(result.stdout, '')
+  assert.equal(result.stderr.trim(), 'arquivo de configuração do projeto não existe')
+  assert.equal(readProjectStateStore(context).missions[0].status, 'validation')
+  const [event] = readProjectEventStore(context).events
+  assert.equal(event.type, 'mission.review.unavailable')
+  assert.equal(event.data.sessionId, null)
+})
 
 for (const [name, argumentsList, message] of [
   ['comando ausente', [], 'comando é obrigatório'],

@@ -6,6 +6,7 @@ import {
   listReadyProjectMissions,
 } from './mission-engine.js'
 import { executeProjectMission } from './mission-execution.js'
+import { reviewProjectMission } from './mission-review.js'
 import { validateConfiguredProjectMission } from './mission-validation.js'
 import { createProjectContext } from './project-context.js'
 import { validateProjectRoot } from './project-root.js'
@@ -83,6 +84,16 @@ try {
     })
 
     printJson(await validateConfiguredProjectMission(
+      createContext(options),
+      options['--mission'],
+    ))
+  } else if (command === 'review-mission') {
+    const options = parseCliOptions(argumentsList, {
+      ...projectRootOption,
+      '--mission': { required: true },
+    })
+
+    printJson(await reviewProjectMission(
       createContext(options),
       options['--mission'],
     ))

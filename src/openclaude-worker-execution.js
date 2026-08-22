@@ -19,7 +19,7 @@ export async function executeOpenClaudeQuery(input) {
     throw new Error('entrada deve ser um objeto')
   }
 
-  const { projectRoot, prompt, sessionMode } = input
+  const { projectRoot, prompt, sessionMode, responsibility } = input
 
   if (typeof prompt !== 'string') {
     throw new Error('prompt deve ser uma string')
@@ -35,7 +35,11 @@ export async function executeOpenClaudeQuery(input) {
     throw new Error('modo de sessão OpenClaude não é suportado')
   }
 
-  const options = createOpenClaudeQueryOptions(projectRoot)
+  if (!['mission-execution', 'mission-review'].includes(responsibility)) {
+    throw new Error('responsabilidade OpenClaude não é suportada')
+  }
+
+  const options = createOpenClaudeQueryOptions(projectRoot, responsibility)
   const execution = query({
     prompt: validatedPrompt,
     options,

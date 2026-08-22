@@ -57,7 +57,7 @@ before(() => {
   symlinkSync(join(projectRoot, '.jzl'), join(projectRoot, 'state-alias'), linkType)
 
   initialRootEntries = readdirSync(projectRoot).sort()
-  canUseTool = createOpenClaudeToolPolicy(projectRoot)
+  canUseTool = createOpenClaudeToolPolicy(projectRoot, 'mission-execution')
 })
 
 after(() => {
@@ -288,4 +288,48 @@ test('policy não cria, altera ou remove entradas', () => {
   assert.deepEqual(readdirSync(projectRoot).sort(), initialRootEntries)
   assert.equal(readFileSync(join(projectRoot, 'AGENTS.md'), 'utf8'), 'protected agents')
   assert.equal(readFileSync(join(externalRoot, 'outside.txt'), 'utf8'), 'outside')
+})
+
+test('mission-review permite somente Read, Glob e Grep seguros', async () => {
+  const reviewPolicy = createOpenClaudeToolPolicy(projectRoot, 'mission-review')
+
+  assert.deepEqual(await reviewPolicy('Read', {
+    file_path: join(projectRoot, 'src', 'inside.txt'),
+  }), { behavior: 'allow' })
+  assert.deepEqual(await reviewPolicy('Glob', {
+    pattern: '**/*.txt', path: join(projectRoot, 'src'),
+  }), { behavior: 'allow' })
+  assert.deepEqual(await reviewPolicy('Grep', {
+    pattern: 'inside', path: join(projectRoot, 'src'),
+  }), { behavior: 'allow' })
+
+  for (const [name, input] of [
+    ['Write', { file_path: join(projectRoot, 'src', 'new.txt'), content: 'x' }],
+    ['Edit', { file_path: join(projectRoot, 'src', 'inside.txt') }],
+    ['Bash', { command: 'echo no' }],
+    ['Agent', { prompt: 'no' }],
+    ['FutureTool', {}],
+  ]) {
+    assert.equal((await reviewPolicy(name, input)).behavior, 'deny')
+  }
+
+  assert.equal((await reviewPolicy('Read', {
+    file_path: join(externalRoot, 'outside.txt'),
+  })).behavior, 'deny')
+  assert.equal((await reviewPolicy('Read', {
+    file_path: join(projectRoot, 'external-link', 'outside.txt'),
+  })).behavior, 'deny')
+})
+
+test('responsabilidade é explícita e execution continua read-write', async () => {
+  assert.throws(
+    () => createOpenClaudeToolPolicy(projectRoot),
+    { message: 'responsabilidade OpenClaude não é suportada' },
+  )
+  assert.deepEqual(await canUseTool('Write', {
+    file_path: join(projectRoot, 'src', 'new.txt'), content: 'x',
+  }), { behavior: 'allow' })
+  assert.deepEqual(await canUseTool('Edit', {
+    file_path: join(projectRoot, 'src', 'inside.txt'),
+  }), { behavior: 'allow' })
 })

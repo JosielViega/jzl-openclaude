@@ -8,6 +8,8 @@ import {
   listProjectHistory,
   recordMissionExecutionError,
   recordMissionExecutionSuccess,
+  recordMissionReviewFinished,
+  recordMissionReviewUnavailable,
   recordMissionValidationFinished,
   recordMissionValidationUnavailable,
 } from '../src/execution-history.js'
@@ -134,4 +136,45 @@ test('rejeita missionId de histórico inválida', (t) => {
   assert.throws(() => listProjectHistory(context, 'mission-1'), {
     message: 'missionId de histórico é inválido',
   })
+})
+
+test('registra review finished PASS e CONCERNS sem transição', (t) => {
+  const context = createContext(t)
+  const pass = recordMissionReviewFinished(context, {
+    missionId: 'mission-0001',
+    review: { sessionId: 'review-1', verdict: 'PASS', summary: 'ok', findings: [] },
+  })
+  const concerns = recordMissionReviewFinished(context, {
+    missionId: 'mission-0002',
+    review: {
+      sessionId: 'review-2', verdict: 'CONCERNS', summary: 'problema',
+      findings: [{ severity: 'LOW', title: 'x', detail: 'y', paths: [] }],
+    },
+  })
+
+  assert.equal(pass.type, 'mission.review.finished')
+  assert.equal(concerns.data.verdict, 'CONCERNS')
+  assert.equal(Object.hasOwn(pass.data, 'fromStatus'), false)
+  assert.equal(Object.hasOwn(pass.data, 'toStatus'), false)
+})
+
+test('registra review unavailable com ou sem sessionId sem persistir Error', (t) => {
+  const context = createContext(t)
+  const error = new Error('review falhou')
+  error.cause = new Error('segredo')
+  const unidentified = recordMissionReviewUnavailable(context, {
+    missionId: 'mission-0001', sessionId: null, error,
+  })
+  const identified = recordMissionReviewUnavailable(context, {
+    missionId: 'mission-0001', sessionId: 'review-session', error: 'inválido',
+  })
+
+  assert.deepEqual(unidentified.data, {
+    sessionId: null, errorMessage: 'review falhou',
+  })
+  assert.deepEqual(identified.data, {
+    sessionId: 'review-session', errorMessage: 'inválido',
+  })
+  assert.equal(JSON.stringify(unidentified).includes('stack'), false)
+  assert.equal(JSON.stringify(unidentified).includes('segredo'), false)
 })

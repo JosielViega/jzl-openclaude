@@ -70,6 +70,16 @@ test('rejeita descriptor de sessão antes de criar worker', async () => {
         missionId: 'mission-0001',
       },
     }),
-    { message: 'modo da sessão de execução não é suportado' },
+    { message: 'modo da sessão de Mission não é suportado' },
   )
+})
+
+test('aceita descriptor mission-review e valida projectRoot antes do worker', async () => {
+  await assert.rejects(executeOpenClaudeText({
+    projectRoot: 'relative/path',
+    prompt: 'revisar',
+    session: {
+      responsibility: 'mission-review', mode: 'fresh', missionId: 'mission-0001',
+    },
+  }), { message: 'projectRoot deve ser um caminho absoluto' })
 })

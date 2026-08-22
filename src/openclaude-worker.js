@@ -17,6 +17,7 @@ async function main() {
     projectRoot: process.cwd(),
     prompt: request.prompt,
     sessionMode: request.sessionMode,
+    responsibility: request.responsibility,
   })
 
   console.log(JSON.stringify(execution))

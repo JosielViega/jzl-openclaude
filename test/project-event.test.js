@@ -114,6 +114,57 @@ test('valida shape de validation unavailable', () => {
   )), /errorMessage/)
 })
 
+test('aceita review PASS e CONCERNS sem transição de workflow', () => {
+  for (const data of [
+    { sessionId: 'session-review-1', verdict: 'PASS', summary: 'Tudo certo.', findings: [] },
+    {
+      sessionId: 'session-review-2', verdict: 'CONCERNS', summary: 'Há problema.',
+      findings: [{ severity: 'HIGH', title: 'Falha', detail: 'Detalhe', paths: ['index.php'] }],
+    },
+  ]) {
+    const value = event('mission.review.finished', data)
+    assert.strictEqual(validateProjectEvent(value), value)
+    assert.equal(Object.hasOwn(value.data, 'fromStatus'), false)
+    assert.equal(Object.hasOwn(value.data, 'toStatus'), false)
+  }
+})
+
+test('valida review finished e coerência de findings', () => {
+  const base = { sessionId: 'session-review', verdict: 'PASS', summary: 'ok', findings: [] }
+  assert.throws(() => validateProjectEvent(event('mission.review.finished', {
+    ...base, sessionId: '',
+  })), /sessionId/)
+  assert.throws(() => validateProjectEvent(event('mission.review.finished', {
+    ...base, verdict: 'OTHER',
+  })), /verdict/)
+  assert.throws(() => validateProjectEvent(event('mission.review.finished', {
+    ...base, findings: [{ severity: 'LOW', title: 'x', detail: 'x', paths: [] }],
+  })), /incoerente/)
+})
+
+test('aceita review unavailable com sessionId null ou identificado', () => {
+  for (const sessionId of [null, 'session-review']) {
+    const value = event('mission.review.unavailable', {
+      sessionId, errorMessage: 'provider indisponível',
+    })
+    assert.strictEqual(validateProjectEvent(value), value)
+  }
+})
+
+test('valida review unavailable e preserva campos aditivos', () => {
+  assert.throws(() => validateProjectEvent(event('mission.review.unavailable', {
+    sessionId: '', errorMessage: 'x',
+  })), /sessionId/)
+  assert.throws(() => validateProjectEvent(event('mission.review.unavailable', {
+    sessionId: null, errorMessage: '',
+  })), /errorMessage/)
+  const value = event('mission.review.unavailable', {
+    sessionId: null, errorMessage: 'x', extra: true,
+  }, { extra: true })
+  assert.strictEqual(validateProjectEvent(value), value)
+  assert.equal(value.data.extra, true)
+})
+
 for (const [name, value, message] of [
   ['container null', null, 'evento deve ser um objeto'],
   ['id ausente', { ...executionSuccess(), id: undefined }, 'id do evento é obrigatório'],

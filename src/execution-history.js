@@ -58,6 +58,30 @@ export function recordMissionValidationUnavailable(context, input) {
   })
 }
 
+export function recordMissionReviewFinished(context, input) {
+  return appendProjectEvent(context, {
+    type: 'mission.review.finished',
+    missionId: input.missionId,
+    data: {
+      sessionId: input.review.sessionId,
+      verdict: input.review.verdict,
+      summary: input.review.summary,
+      findings: input.review.findings,
+    },
+  })
+}
+
+export function recordMissionReviewUnavailable(context, input) {
+  return appendProjectEvent(context, {
+    type: 'mission.review.unavailable',
+    missionId: input.missionId,
+    data: {
+      sessionId: input.sessionId,
+      errorMessage: errorMessage(input.error),
+    },
+  })
+}
+
 export function listProjectHistory(context, missionId) {
   if (
     missionId !== undefined

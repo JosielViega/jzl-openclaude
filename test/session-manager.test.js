@@ -3,7 +3,10 @@ import { test } from 'node:test'
 
 import {
   createMissionExecutionSession,
+  createMissionReviewSession,
   validateMissionExecutionSession,
+  validateMissionReviewSession,
+  validateMissionSession,
 } from '../src/session-manager.js'
 
 function mission(status = 'running') {
@@ -15,6 +18,63 @@ function mission(status = 'running') {
     dependencies: [],
   }
 }
+
+test('cria sessão fresh de revisão para Mission validation sem mutar', () => {
+  const validationMission = mission('validation')
+  const snapshot = structuredClone(validationMission)
+  const session = createMissionReviewSession(validationMission)
+
+  assert.deepEqual(session, {
+    responsibility: 'mission-review',
+    mode: 'fresh',
+    missionId: 'mission-0001',
+  })
+  assert.deepEqual(validationMission, snapshot)
+})
+
+for (const status of ['pending', 'running', 'failed', 'correction', 'completed']) {
+  test(`rejeita Mission ${status} para sessão de revisão`, () => {
+    assert.throws(
+      () => createMissionReviewSession(mission(status)),
+      { message: 'Mission deve estar validation para criar sessão de revisão' },
+    )
+  })
+}
+
+test('validator genérico aceita execution e review fresh', () => {
+  const execution = createMissionExecutionSession(mission('running'))
+  const review = createMissionReviewSession(mission('validation'))
+
+  assert.strictEqual(validateMissionSession(execution), execution)
+  assert.strictEqual(validateMissionSession(review), review)
+})
+
+test('validator genérico falha fechado para descriptors inválidos', () => {
+  for (const [descriptor, message] of [
+    [null, 'sessão de Mission deve ser um objeto'],
+    [{ responsibility: 'other', mode: 'fresh', missionId: 'mission-0001' }, 'responsabilidade da sessão de Mission não é suportada'],
+    [{ responsibility: 'mission-review', mode: 'resume', missionId: 'mission-0001' }, 'modo da sessão de Mission não é suportado'],
+    [{ responsibility: 'mission-review', mode: 'fresh', missionId: 'mission-1' }, 'missionId da sessão de Mission é inválido'],
+  ]) {
+    assert.throws(() => validateMissionSession(descriptor), { message })
+  }
+})
+
+test('validators especializados não confundem responsabilidades', () => {
+  const execution = createMissionExecutionSession(mission('running'))
+  const review = createMissionReviewSession(mission('validation'))
+
+  assert.strictEqual(validateMissionExecutionSession(execution), execution)
+  assert.strictEqual(validateMissionReviewSession(review), review)
+  assert.throws(
+    () => validateMissionExecutionSession(review),
+    { message: 'responsabilidade da sessão de execução não é suportada' },
+  )
+  assert.throws(
+    () => validateMissionReviewSession(execution),
+    { message: 'responsabilidade da sessão de revisão não é suportada' },
+  )
+})
 
 test('cria política fresh para Mission running sem mutar a Mission', () => {
   const runningMission = mission()
