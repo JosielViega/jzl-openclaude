@@ -13,6 +13,7 @@ import { test } from 'node:test'
 
 import { createProjectContext } from '../src/project-context.js'
 import { initializeProjectConfigStore } from '../src/project-config-store.js'
+import { readProjectEventStore } from '../src/project-event-store.js'
 import { listReadyProjectMissions } from '../src/mission-engine.js'
 import {
   validateConfiguredProjectMission,
@@ -159,6 +160,12 @@ test('PASS conclui Mission, preserva campos e libera dependente', async (t) => {
     ['mission-0002'],
   )
   assertEvidenceNotPersisted(state)
+  const [event] = readProjectEventStore(context).events
+  assert.equal(event.type, 'mission.validation.finished')
+  assert.equal(event.data.outcome, 'PASS')
+  assert.equal(event.data.fromStatus, 'validation')
+  assert.equal(event.data.toStatus, 'completed')
+  assert.deepEqual(event.data.results, result.validation.results)
 })
 
 test('FAIL envia Mission para correction sem liberar dependente', async (t) => {
@@ -182,6 +189,9 @@ test('FAIL envia Mission para correction sem liberar dependente', async (t) => {
   assert.equal(state.missions[0].status, 'correction')
   assert.deepEqual(listReadyProjectMissions(context), [])
   assertEvidenceNotPersisted(state)
+  const [event] = readProjectEventStore(context).events
+  assert.equal(event.data.outcome, 'FAIL')
+  assert.equal(event.data.toStatus, 'correction')
 })
 
 test('ERROR mantém Mission em validation sem liberar dependente', async (t) => {
@@ -205,6 +215,9 @@ test('ERROR mantém Mission em validation sem liberar dependente', async (t) => 
   assert.equal(state.missions[0].status, 'validation')
   assert.deepEqual(listReadyProjectMissions(context), [])
   assertEvidenceNotPersisted(state)
+  const [event] = readProjectEventStore(context).events
+  assert.equal(event.data.outcome, 'ERROR')
+  assert.equal(event.data.toStatus, 'validation')
 })
 
 test('zero validators falha sem alterar Mission validation', async (t) => {
@@ -218,6 +231,9 @@ test('zero validators falha sem alterar Mission validation', async (t) => {
     { message: 'ao menos um validator é obrigatório' },
   )
   assert.deepEqual(readProjectStateStore(context).missions, [mission])
+  const [event] = readProjectEventStore(context).events
+  assert.equal(event.type, 'mission.validation.unavailable')
+  assert.equal(event.data.errorMessage, 'ao menos um validator é obrigatório')
 })
 
 test('status incorreto rejeita antes de executar validator', async (t) => {
@@ -250,6 +266,7 @@ test('status incorreto rejeita antes de executar validator', async (t) => {
     )
     assert.equal(existsSync(sentinelPath), false)
     assert.deepEqual(readProjectStateStore(context).missions, [mission])
+    assert.equal(existsSync(join(projectRoot, '.jzl', 'events.json')), false)
   }
 })
 
@@ -265,6 +282,10 @@ test('Mission e State Store inexistentes falham antes dos processos', async (t) 
       [createValidator('pass')],
     ),
     { message: 'Mission não existe' },
+  )
+  assert.equal(
+    existsSync(join(initialized.projectRoot, '.jzl', 'events.json')),
+    false,
   )
 
   const missingStore = createTemporaryContext(t)
@@ -320,6 +341,7 @@ test('ERROR prevalece sobre FAIL e mantém Mission em validation', async (t) => 
   )
   assert.equal(result.mission.status, 'validation')
   assert.equal(readProjectStateStore(context).missions[0].status, 'validation')
+  assert.equal(readProjectEventStore(context).events[0].data.outcome, 'ERROR')
 })
 
 test('validação configurada PHP PASS conclui e libera dependente', async (t) => {
@@ -428,6 +450,9 @@ test('PHP sem configuração mantém Mission validation', async (t) => {
     message: 'executable PHP não configurado para traditional-web',
   })
   assert.equal(readProjectStateStore(context).missions[0].status, 'validation')
+  const [event] = readProjectEventStore(context).events
+  assert.equal(event.type, 'mission.validation.unavailable')
+  assert.equal(event.data.errorMessage, 'executable PHP não configurado para traditional-web')
 })
 
 test('zero PHP propaga exigência de validator e mantém Mission validation', async (t) => {
@@ -439,6 +464,9 @@ test('zero PHP propaga exigência de validator e mantém Mission validation', as
     message: 'ao menos um validator é obrigatório',
   })
   assert.equal(readProjectStateStore(context).missions[0].status, 'validation')
+  const events = readProjectEventStore(context).events
+  assert.equal(events.length, 1)
+  assert.equal(events[0].type, 'mission.validation.unavailable')
 })
 
 test('status errado precede resolução de config na validação configurada', async (t) => {
@@ -450,6 +478,7 @@ test('status errado precede resolução de config na validação configurada', a
     message: 'Mission deve estar validation para validação',
   })
   assert.deepEqual(readProjectStateStore(context).missions, [mission])
+  assert.equal(existsSync(join(context.projectRoot, '.jzl', 'events.json')), false)
 })
 
 test('config ausente não altera Mission validation', async (t) => {
@@ -461,6 +490,9 @@ test('config ausente não altera Mission validation', async (t) => {
     message: 'arquivo de configuração do projeto não existe',
   })
   assert.deepEqual(readProjectStateStore(context).missions, [mission])
+  const [event] = readProjectEventStore(context).events
+  assert.equal(event.type, 'mission.validation.unavailable')
+  assert.equal(event.data.errorMessage, 'arquivo de configuração do projeto não existe')
 })
 
 test('config inválida não altera Mission validation', async (t) => {
@@ -477,4 +509,42 @@ test('config inválida não altera Mission validation', async (t) => {
     message: 'schemaVersion da configuração do projeto não é suportado',
   })
   assert.deepEqual(readProjectStateStore(context).missions, [mission])
+  assert.equal(readProjectEventStore(context).events[0].type, 'mission.validation.unavailable')
+})
+
+test('falha de history após PASS não reverte Mission completed', async (t) => {
+  const { context, projectRoot } = createTemporaryContext(t)
+  const mission = createMission('mission-0001')
+  initializeMissions(context, [mission])
+  mkdirSync(join(projectRoot, '.jzl', 'events.json'))
+
+  await assert.rejects(
+    validateProjectMission(context, mission.id, [createValidator('pass')]),
+    { message: 'arquivo de histórico do projeto não é um arquivo' },
+  )
+  assert.equal(readProjectStateStore(context).missions[0].status, 'completed')
+})
+
+test('falha original e falha de history em unavailable são agregadas', async (t) => {
+  const { context, projectRoot } = createTemporaryContext(t)
+  const mission = createMission('mission-0001')
+  initializeMissions(context, [mission])
+  mkdirSync(join(projectRoot, '.jzl', 'events.json'))
+
+  await assert.rejects(
+    validateProjectMission(context, mission.id, []),
+    (error) => {
+      assert.ok(error instanceof AggregateError)
+      assert.equal(
+        error.message,
+        'A validação não pôde ser preparada e o histórico não pôde ser persistido',
+      )
+      assert.deepEqual(error.errors.map(({ message }) => message), [
+        'ao menos um validator é obrigatório',
+        'arquivo de histórico do projeto não é um arquivo',
+      ])
+      return true
+    },
+  )
+  assert.equal(readProjectStateStore(context).missions[0].status, 'validation')
 })

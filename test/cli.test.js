@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url'
 
 import { createProjectContext } from '../src/project-context.js'
 import { initializeProjectConfigStore } from '../src/project-config-store.js'
+import { appendProjectEvent } from '../src/project-event-store.js'
 import {
   initializeProjectStateStore,
   writeProjectStateStore,
@@ -265,6 +266,71 @@ test('run raw é comando desconhecido e não aceita prompt livre', (t) => {
   assert.equal(result.stdout, '')
   assert.equal(result.stderr.trim(), 'comando desconhecido: run')
 })
+
+test('history retorna eventos em ordem em um único JSON', (t) => {
+  const root = createRoot(t)
+  initProject(root)
+  const context = createProjectContext(root)
+  for (const [missionId, errorMessage] of [
+    ['mission-0002', 'primeiro'],
+    ['mission-0001', 'segundo'],
+    ['mission-0002', 'terceiro'],
+  ]) {
+    appendProjectEvent(context, {
+      type: 'mission.validation.unavailable',
+      missionId,
+      data: { status: 'validation', errorMessage },
+    })
+  }
+
+  const { result, output } = runJsonCli(['history', '--project-root', root])
+
+  assert.deepEqual(output.events.map(({ id }) => id), [
+    'event-000001',
+    'event-000002',
+    'event-000003',
+  ])
+  assert.equal(result.stdout.trim().split(/\r?\n/).length, 1)
+})
+
+test('history filtra por Mission e retorna vazio para Mission sem eventos', (t) => {
+  const root = createRoot(t)
+  initProject(root)
+  const context = createProjectContext(root)
+  for (const missionId of ['mission-0001', 'mission-0002', 'mission-0001']) {
+    appendProjectEvent(context, {
+      type: 'mission.validation.unavailable',
+      missionId,
+      data: { status: 'validation', errorMessage: missionId },
+    })
+  }
+
+  const filtered = runJsonCli([
+    'history', '--project-root', root, '--mission', 'mission-0001',
+  ]).output
+  const empty = runJsonCli([
+    'history', '--project-root', root, '--mission', 'mission-9999',
+  ]).output
+
+  assert.deepEqual(filtered.events.map(({ id }) => id), ['event-000001', 'event-000003'])
+  assert.deepEqual(empty, { events: [] })
+})
+
+for (const [name, argumentsList, message] of [
+  ['mission inválida', ['history', '--project-root', 'ROOT', '--mission', 'mission-1'], 'missionId de histórico é inválido'],
+  ['mission duplicada', ['history', '--project-root', 'ROOT', '--mission', 'mission-0001', '--mission', 'mission-0002'], 'opção duplicada: --mission'],
+  ['flag desconhecida', ['history', '--project-root', 'ROOT', '--other', 'x'], 'argumento desconhecido: --other'],
+]) {
+  test(`history rejeita ${name}`, (t) => {
+    const root = createRoot(t)
+    initProject(root)
+    const result = runCli(argumentsList.map((value) => value === 'ROOT' ? root : value))
+
+    assert.equal(result.status, 1)
+    assert.equal(result.stdout, '')
+    assert.equal(result.stderr.trim(), message)
+  })
+}
 
 for (const [name, argumentsList, message] of [
   ['comando ausente', [], 'comando é obrigatório'],

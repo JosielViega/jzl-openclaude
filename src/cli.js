@@ -1,4 +1,5 @@
 import { parseCliOptions } from './cli-options.js'
+import { listProjectHistory } from './execution-history.js'
 import { initializeManagedProject } from './managed-project.js'
 import {
   createProjectMission,
@@ -95,6 +96,15 @@ try {
       createContext(options),
       options['--mission'],
     ))
+  } else if (command === 'history') {
+    const options = parseCliOptions(argumentsList, {
+      ...projectRootOption,
+      '--mission': {},
+    })
+
+    printJson({
+      events: listProjectHistory(createContext(options), options['--mission']),
+    })
   } else {
     throw new Error(`comando desconhecido: ${command}`)
   }

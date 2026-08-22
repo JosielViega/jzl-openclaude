@@ -12,6 +12,10 @@ import { test } from 'node:test'
 import { initializeManagedProject } from '../src/managed-project.js'
 import { createProjectContext } from '../src/project-context.js'
 import { readProjectConfigStore } from '../src/project-config-store.js'
+import {
+  appendProjectEvent,
+  readProjectEventStore,
+} from '../src/project-event-store.js'
 import { readProjectStateStore } from '../src/project-state-store.js'
 
 function createProject(t) {
@@ -35,10 +39,19 @@ test('inicializa projeto traditional-web com config e state separados', (t) => {
   assert.deepEqual(result.state, readProjectStateStore(context))
   assert.equal(existsSync(join(projectRoot, '.jzl', 'config.json')), true)
   assert.equal(existsSync(join(projectRoot, '.jzl', 'state.json')), true)
+  assert.equal(existsSync(join(projectRoot, '.jzl', 'events.json')), true)
+  assert.deepEqual(readProjectEventStore(context), {
+    schemaVersion: 1,
+    events: [],
+  })
   assert.equal(JSON.stringify(result.config).includes('projectRoot'), false)
   assert.equal(JSON.stringify(result.state).includes('projectRoot'), false)
   assert.notEqual(
     readFileSync(join(projectRoot, '.jzl', 'config.json'), 'utf8'),
+    readFileSync(join(projectRoot, '.jzl', 'state.json'), 'utf8'),
+  )
+  assert.notEqual(
+    readFileSync(join(projectRoot, '.jzl', 'events.json'), 'utf8'),
     readFileSync(join(projectRoot, '.jzl', 'state.json'), 'utf8'),
   )
 })
@@ -64,8 +77,15 @@ test('rerun é idempotente e não sobrescreve stores existentes', (t) => {
   })
   const configPath = join(projectRoot, '.jzl', 'config.json')
   const statePath = join(projectRoot, '.jzl', 'state.json')
+  const eventsPath = join(projectRoot, '.jzl', 'events.json')
+  appendProjectEvent(context, {
+    type: 'mission.validation.unavailable',
+    missionId: 'mission-0001',
+    data: { status: 'validation', errorMessage: 'preservar' },
+  })
   const configBefore = readFileSync(configPath, 'utf8')
   const stateBefore = readFileSync(statePath, 'utf8')
+  const eventsBefore = readFileSync(eventsPath, 'utf8')
 
   const result = initializeManagedProject(context, {
     template: 'traditional-web',
@@ -74,6 +94,7 @@ test('rerun é idempotente e não sobrescreve stores existentes', (t) => {
 
   assert.equal(readFileSync(configPath, 'utf8'), configBefore)
   assert.equal(readFileSync(statePath, 'utf8'), stateBefore)
+  assert.equal(readFileSync(eventsPath, 'utf8'), eventsBefore)
   assert.equal(result.config.tools.php.executable, process.execPath)
 })
 
