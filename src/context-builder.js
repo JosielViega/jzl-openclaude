@@ -1,13 +1,12 @@
 import { realpathSync } from 'node:fs'
 
-import { listProjectHistory } from './execution-history.js'
+import { validateHandoff } from './handoff.js'
 import { validateMission } from './mission.js'
 import { validateProjectRoot } from './project-root.js'
 
 const MAX_CORRECTION_VALIDATORS = 20
 const MAX_DIAGNOSTIC_TEXT_LENGTH = 4000
 const TRUNCATION_MARKER = '[conteúdo truncado pelo JZL]'
-const eventIdPattern = /^event-\d{6,}$/
 
 function isObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -64,10 +63,7 @@ function cloneFailedValidator(result, redactProjectRoot) {
       stdout: sanitizeDiagnosticText(result.evidence.stdout, redactProjectRoot),
       stderr: sanitizeDiagnosticText(result.evidence.stderr, redactProjectRoot),
       errorMessage: typeof result.evidence.errorMessage === 'string'
-        ? sanitizeDiagnosticText(
-          result.evidence.errorMessage,
-          redactProjectRoot,
-        )
+        ? sanitizeDiagnosticText(result.evidence.errorMessage, redactProjectRoot)
         : null,
     },
   }
@@ -96,142 +92,32 @@ function validateStandards(standards) {
   }
 }
 
-function validateEvidence(evidence) {
-  if (!isObject(evidence)) {
-    throw new Error('evidence do feedback de correção deve ser um objeto')
+function buildHandoff(context, handoff) {
+  if (handoff === null) {
+    return null
   }
 
-  if (!Number.isInteger(evidence.exitCode) && evidence.exitCode !== null) {
-    throw new Error('exitCode do feedback de correção é inválido')
-  }
-
-  if (evidence.signal !== null && typeof evidence.signal !== 'string') {
-    throw new Error('signal do feedback de correção é inválido')
-  }
-
-  if (typeof evidence.stdout !== 'string') {
-    throw new Error('stdout do feedback de correção deve ser uma string')
-  }
-
-  if (evidence.stdout.length > MAX_DIAGNOSTIC_TEXT_LENGTH) {
-    throw new Error('stdout do feedback de correção excede o limite')
-  }
-
-  if (typeof evidence.stderr !== 'string') {
-    throw new Error('stderr do feedback de correção deve ser uma string')
-  }
-
-  if (evidence.stderr.length > MAX_DIAGNOSTIC_TEXT_LENGTH) {
-    throw new Error('stderr do feedback de correção excede o limite')
-  }
-
-  if (
-    evidence.errorMessage !== null
-    && typeof evidence.errorMessage !== 'string'
-  ) {
-    throw new Error('errorMessage do feedback de correção é inválido')
-  }
-
-  if (
-    typeof evidence.errorMessage === 'string'
-    && evidence.errorMessage.length > MAX_DIAGNOSTIC_TEXT_LENGTH
-  ) {
-    throw new Error('errorMessage do feedback de correção excede o limite')
-  }
-}
-
-function validateCorrectionFeedback(correctionFeedback) {
-  if (correctionFeedback === null) {
-    return
-  }
-
-  if (!isObject(correctionFeedback)) {
-    throw new Error('feedback de correção deve ser um objeto ou null')
-  }
-
-  if (
-    typeof correctionFeedback.eventId !== 'string'
-    || !eventIdPattern.test(correctionFeedback.eventId)
-  ) {
-    throw new Error('eventId do feedback de correção é inválido')
-  }
-
-  if (
-    !Array.isArray(correctionFeedback.failedValidators)
-    || correctionFeedback.failedValidators.length === 0
-    || correctionFeedback.failedValidators.length > MAX_CORRECTION_VALIDATORS
-  ) {
-    throw new Error('failedValidators do feedback de correção é inválido')
-  }
-
-  for (const validator of correctionFeedback.failedValidators) {
-    if (!isObject(validator)) {
-      throw new Error('validator do feedback de correção deve ser um objeto')
-    }
-
-    if (typeof validator.id !== 'string' || validator.id.trim() === '') {
-      throw new Error('id do validator do feedback de correção é inválido')
-    }
-
-    if (validator.status !== 'FAIL') {
-      throw new Error('status do validator do feedback de correção deve ser FAIL')
-    }
-
-    validateEvidence(validator.evidence)
-  }
-
-  if (
-    !Number.isInteger(correctionFeedback.omittedCount)
-    || correctionFeedback.omittedCount < 0
-  ) {
-    throw new Error('omittedCount do feedback de correção é inválido')
-  }
-}
-
-export function resolveMissionCorrectionFeedback(context, missionId) {
-  let events
-
-  try {
-    events = listProjectHistory(context, missionId)
-  } catch (error) {
-    if (
-      error instanceof Error
-      && error.message === 'arquivo de histórico do projeto não existe'
-    ) {
-      throw new Error('feedback de correção da Mission não está disponível')
-    }
-
-    throw error
-  }
-
-  const event = events.findLast((candidate) => (
-    candidate.type === 'mission.validation.finished'
-    && candidate.data.outcome === 'FAIL'
-    && candidate.data.fromStatus === 'validation'
-    && candidate.data.toStatus === 'correction'
-  ))
-
-  if (event === undefined) {
-    throw new Error('feedback de correção da Mission não está disponível')
-  }
-
-  const failedResults = event.data.results.filter(
-    (result) => result.status === 'FAIL',
-  )
-
-  if (failedResults.length === 0) {
-    throw new Error('feedback de correção da Mission não está disponível')
-  }
-
-  const selectedResults = failedResults.slice(0, MAX_CORRECTION_VALIDATORS)
+  const selectedValidators = handoff.payload.failedValidators
+    .slice(0, MAX_CORRECTION_VALIDATORS)
   const redactProjectRoot = createProjectRootRedactor(context)
 
   return {
-    eventId: event.id,
-    failedValidators: selectedResults.map(
-      (result) => cloneFailedValidator(result, redactProjectRoot),
-    ),
-    omittedCount: failedResults.length - selectedResults.length,
+    schemaVersion: handoff.schemaVersion,
+    type: handoff.type,
+    missionId: handoff.missionId,
+    source: {
+      responsibility: handoff.source.responsibility,
+      eventId: handoff.source.eventId,
+    },
+    target: {
+      responsibility: handoff.target.responsibility,
+    },
+    payload: {
+      failedValidators: selectedValidators.map(
+        (validator) => cloneFailedValidator(validator, redactProjectRoot),
+      ),
+      omittedCount: handoff.payload.failedValidators.length - selectedValidators.length,
+    },
   }
 }
 
@@ -247,14 +133,20 @@ export function buildMissionExecutionContext(context, input) {
   }
 
   validateStandards(input.standards)
-  validateCorrectionFeedback(input.correctionFeedback)
+
+  if (input.handoff !== null) {
+    validateHandoff(input.handoff)
+
+    if (input.handoff.missionId !== input.mission.id) {
+      throw new Error('handoff não pertence à Mission de execução')
+    }
+  }
+
   validateProjectRoot(context.projectRoot)
 
   return {
     mission: structuredClone(input.mission),
     standards: structuredClone(input.standards),
-    correctionFeedback: input.correctionFeedback === null
-      ? null
-      : structuredClone(input.correctionFeedback),
+    handoff: buildHandoff(context, input.handoff),
   }
 }

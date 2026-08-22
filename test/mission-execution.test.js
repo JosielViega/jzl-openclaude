@@ -194,7 +194,7 @@ test('correction sem Event Store falha no preflight sem transição ou evento', 
   writeProjectStateStore(context, { schemaVersion: 1, missions: [mission] })
 
   await assert.rejects(executeProjectMission(context, mission.id), {
-    message: 'feedback de correção da Mission não está disponível',
+    message: 'handoff de correção da Mission não está disponível',
   })
   assert.equal(readProjectStateStore(context).missions[0].status, 'correction')
   assert.equal(existsSync(join(context.projectRoot, '.jzl', 'events.json')), false)
@@ -210,7 +210,7 @@ test('correction com Event Store vazio falha sem transição ou novo evento', as
   initializeProjectEventStore(context)
 
   await assert.rejects(executeProjectMission(context, mission.id), {
-    message: 'feedback de correção da Mission não está disponível',
+    message: 'handoff de correção da Mission não está disponível',
   })
   assert.equal(readProjectStateStore(context).missions[0].status, 'correction')
   assert.deepEqual(readProjectEventStore(context).events, [])
@@ -242,7 +242,31 @@ test('correction ignora histórico com apenas PASS e ERROR', async (t) => {
   const before = readProjectEventStore(context)
 
   await assert.rejects(executeProjectMission(context, mission.id), {
-    message: 'feedback de correção da Mission não está disponível',
+    message: 'handoff de correção da Mission não está disponível',
+  })
+  assert.equal(readProjectStateStore(context).missions[0].status, 'correction')
+  assert.deepEqual(readProjectEventStore(context), before)
+})
+
+test('correction rejeita evento FAIL sem resultado FAIL no preflight', async (t) => {
+  const context = createTemporaryContext(t)
+  const mission = {
+    id: 'mission-0001', title: 'A', objective: 'A', status: 'correction', dependencies: [],
+  }
+  initializeProjectStateStore(context)
+  writeProjectStateStore(context, { schemaVersion: 1, missions: [mission] })
+  appendProjectEvent(context, {
+    type: 'mission.validation.finished',
+    missionId: mission.id,
+    data: {
+      outcome: 'FAIL', fromStatus: 'validation', toStatus: 'correction',
+      results: [validationResult('pass', 'PASS')],
+    },
+  })
+  const before = readProjectEventStore(context)
+
+  await assert.rejects(executeProjectMission(context, mission.id), {
+    message: 'handoff de correção da Mission não está disponível',
   })
   assert.equal(readProjectStateStore(context).missions[0].status, 'correction')
   assert.deepEqual(readProjectEventStore(context), before)

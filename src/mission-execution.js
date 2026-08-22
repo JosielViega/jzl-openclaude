@@ -1,8 +1,5 @@
 import { executeOpenClaudeText } from './openclaude-execution-adapter.js'
-import {
-  buildMissionExecutionContext,
-  resolveMissionCorrectionFeedback,
-} from './context-builder.js'
+import { buildMissionExecutionContext } from './context-builder.js'
 import {
   recordMissionExecutionError,
   recordMissionExecutionSuccess,
@@ -14,6 +11,7 @@ import {
   submitProjectMissionForValidation,
 } from './mission-engine.js'
 import { buildMissionExecutionPrompt } from './mission-execution-prompt.js'
+import { resolveMissionCorrectionHandoff } from './handoff-processor.js'
 import { createMissionExecutionSession } from './session-manager.js'
 import { resolveProjectStandards } from './standards-resolver.js'
 
@@ -56,8 +54,8 @@ function persistTechnicalFailure(context, missionId, fromStatus, executionError)
 export async function executeProjectMission(context, missionId) {
   const initialMission = getProjectMission(context, missionId)
   const fromStatus = initialMission.status
-  const correctionFeedback = fromStatus === 'correction'
-    ? resolveMissionCorrectionFeedback(context, missionId)
+  const handoff = fromStatus === 'correction'
+    ? resolveMissionCorrectionHandoff(context, missionId)
     : null
   const runningMission = prepareProjectMissionExecution(context, missionId)
   let prompt
@@ -68,7 +66,7 @@ export async function executeProjectMission(context, missionId) {
     const executionContext = buildMissionExecutionContext(context, {
       mission: runningMission,
       standards,
-      correctionFeedback,
+      handoff,
     })
 
     prompt = buildMissionExecutionPrompt(executionContext)
