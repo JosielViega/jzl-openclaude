@@ -1,5 +1,10 @@
 import { query } from '@gitlawb/openclaude/sdk'
 
+import {
+  createOpenClaudeQueryDeadline,
+  openClaudeExecutionTimeoutMessage,
+  resolveOpenClaudeExecutionGuardrails,
+} from './openclaude-execution-guardrails.js'
 import { createOpenClaudeQueryOptions } from './openclaude-query-options.js'
 
 function errorMessage(error) {
@@ -39,23 +44,36 @@ export async function executeOpenClaudeQuery(input) {
     throw new Error('responsabilidade OpenClaude não é suportada')
   }
 
-  const options = createOpenClaudeQueryOptions(projectRoot, responsibility)
-  const execution = query({
-    prompt: validatedPrompt,
-    options,
-  })
-  const sessionId = (
-    typeof execution.sessionId === 'string'
-    && execution.sessionId.trim() !== ''
-  ) ? execution.sessionId : null
+  const guardrails = resolveOpenClaudeExecutionGuardrails(responsibility)
+  const deadline = createOpenClaudeQueryDeadline(guardrails.queryTimeoutMs)
+  let execution
+  let sessionId = null
 
   try {
+    const options = createOpenClaudeQueryOptions(
+      projectRoot,
+      responsibility,
+      deadline.abortController,
+    )
+    execution = query({
+      prompt: validatedPrompt,
+      options,
+    })
+    sessionId = (
+      typeof execution.sessionId === 'string'
+      && execution.sessionId.trim() !== ''
+    ) ? execution.sessionId : null
+
     if (sessionId === null) {
       throw new Error('OpenClaude não forneceu sessionId para a sessão')
     }
 
     for await (const message of execution) {
       if (message.type === 'result' && message.subtype === 'success') {
+        if (deadline.hasTimedOut()) {
+          throw new Error(openClaudeExecutionTimeoutMessage(responsibility))
+        }
+
         if (message.session_id !== sessionId) {
           throw new Error(
             'sessão OpenClaude retornada não corresponde à sessão iniciada',
@@ -71,8 +89,15 @@ export async function executeOpenClaudeQuery(input) {
 
     throw new Error('OpenClaude não retornou resultado de sucesso')
   } catch (error) {
-    throw new OpenClaudeQueryExecutionError(errorMessage(error), sessionId)
+    const message = deadline.hasTimedOut()
+      ? openClaudeExecutionTimeoutMessage(responsibility)
+      : errorMessage(error)
+
+    throw new OpenClaudeQueryExecutionError(message, sessionId)
   } finally {
-    execution.close()
+    deadline.clear()
+    if (execution !== undefined) {
+      execution.close()
+    }
   }
 }

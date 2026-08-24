@@ -50,6 +50,10 @@ Representa a fronteira do JZL com o worker OpenClaude. O processo principal não
 
 Processo isolado que inicia com `cwd` igual ao `projectRoot` antes de inicializar o runtime do OpenClaude. Inicialmente, será descartável por execução e terminará após entregar seu resultado. Não possui autoridade para alterar o estado autoritativo do workflow.
 
+### Execution Guardrails
+
+Sessões probabilísticas possuem um budget temporal determinístico definido pelo JZL. O worker usa `AbortController` para cancelamento cooperativo da Query, enquanto o processo principal mantém um watchdog independente que encerra o worker caso necessário. Timeout é tratado como erro técnico pelo workflow existente e nunca provoca retry automático.
+
 ### Validator Engine
 
 Executa verificações determinísticas de estado, escopo, dependências, critérios e artefatos. Uma afirmação do modelo de que o trabalho terminou não constitui validação.

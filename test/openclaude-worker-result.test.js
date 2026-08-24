@@ -4,6 +4,7 @@ import { test } from 'node:test'
 import {
   normalizeOpenClaudeWorkerResult,
   OpenClaudeWorkerExecutionError,
+  readOpenClaudeWorkerErrorEnvelope,
 } from '../src/openclaude-worker-result.js'
 
 test('normaliza um resultado de sucesso', () => {
@@ -209,3 +210,21 @@ for (const { name, input, expectedError } of errorCases) {
     )
   })
 }
+
+test('lê somente error envelope completo para auditoria de sessionId', () => {
+  assert.deepEqual(
+    readOpenClaudeWorkerErrorEnvelope(JSON.stringify({
+      error: 'timeout interno', sessionId: 'session-1', extra: true,
+    })),
+    { error: 'timeout interno', sessionId: 'session-1' },
+  )
+  assert.deepEqual(
+    readOpenClaudeWorkerErrorEnvelope(JSON.stringify({ error: 'x', sessionId: null })),
+    { error: 'x', sessionId: null },
+  )
+  for (const stdout of [
+    '', '{', '[]',
+    JSON.stringify({ sessionId: 'session-1', result: 'OK' }),
+    JSON.stringify({ error: 'x', sessionId: 123 }),
+  ]) assert.equal(readOpenClaudeWorkerErrorEnvelope(stdout), null)
+})

@@ -1,5 +1,15 @@
 import { spawnOpenClaudeWorker } from './openclaude-worker-process.js'
-import { normalizeOpenClaudeWorkerResult } from './openclaude-worker-result.js'
+import {
+  normalizeOpenClaudeWorkerResult,
+  OpenClaudeWorkerExecutionError,
+  readOpenClaudeWorkerErrorEnvelope,
+} from './openclaude-worker-result.js'
+import {
+  openClaudeExecutionTimeoutMessage,
+  resolveOpenClaudeExecutionGuardrails,
+} from './openclaude-execution-guardrails.js'
+import { waitForOpenClaudeWorkerClose } from './openclaude-worker-watchdog.js'
+import { validateProjectRoot } from './project-root.js'
 import { validateMissionSession } from './session-manager.js'
 
 export async function executeOpenClaudeText(input) {
@@ -20,8 +30,12 @@ export async function executeOpenClaudeText(input) {
   }
 
   validateMissionSession(session)
+  const validatedProjectRoot = validateProjectRoot(projectRoot)
+  const guardrails = resolveOpenClaudeExecutionGuardrails(
+    session.responsibility,
+  )
 
-  const child = spawnOpenClaudeWorker(projectRoot)
+  const child = spawnOpenClaudeWorker(validatedProjectRoot)
 
   if (child.stdin === null || child.stdout === null || child.stderr === null) {
     throw new Error('OpenClaude worker não disponibilizou canais de processo')
@@ -39,12 +53,10 @@ export async function executeOpenClaudeText(input) {
     stderr += chunk
   })
 
-  const workerClose = new Promise((resolve, reject) => {
-    child.once('error', reject)
-    child.once('close', (code, signal) => {
-      resolve({ code, signal })
-    })
-  })
+  const workerClose = waitForOpenClaudeWorkerClose(
+    child,
+    guardrails.workerTimeoutMs,
+  )
 
   child.stdin.end(JSON.stringify({
     prompt: validatedPrompt,
@@ -52,7 +64,15 @@ export async function executeOpenClaudeText(input) {
     responsibility: session.responsibility,
   }))
 
-  const { code, signal } = await workerClose
+  const { code, signal, timedOut } = await workerClose
+
+  if (timedOut) {
+    const envelope = readOpenClaudeWorkerErrorEnvelope(stdout)
+    throw new OpenClaudeWorkerExecutionError(
+      openClaudeExecutionTimeoutMessage(session.responsibility),
+      envelope?.sessionId ?? null,
+    )
+  }
 
   return normalizeOpenClaudeWorkerResult({
     code,

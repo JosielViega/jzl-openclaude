@@ -29,6 +29,14 @@ function isErrorEnvelope(response) {
     )
 }
 
+export function readOpenClaudeWorkerErrorEnvelope(stdout) {
+  const response = parseResponse(stdout)
+
+  return isErrorEnvelope(response)
+    ? { error: response.error, sessionId: response.sessionId }
+    : null
+}
+
 export class OpenClaudeWorkerExecutionError extends Error {
   constructor(message, sessionId) {
     super(message)
@@ -45,9 +53,9 @@ export function normalizeOpenClaudeWorkerResult(input) {
   }
 
   if (code !== 0) {
-    const response = parseResponse(stdout)
+    const response = readOpenClaudeWorkerErrorEnvelope(stdout)
 
-    if (isErrorEnvelope(response)) {
+    if (response !== null) {
       throw new OpenClaudeWorkerExecutionError(
         response.error,
         response.sessionId,
