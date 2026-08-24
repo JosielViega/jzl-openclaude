@@ -8,6 +8,7 @@ import {
   validateMissionReviewSession,
   validateMissionSession,
 } from '../src/session-manager.js'
+import { resolveResponsibilityDefinition } from '../src/responsibility-registry.js'
 
 function mission(status = 'running') {
   return {
@@ -47,6 +48,21 @@ test('validator genérico aceita execution e review fresh', () => {
 
   assert.strictEqual(validateMissionSession(execution), execution)
   assert.strictEqual(validateMissionSession(review), review)
+})
+
+test('descriptors usam sessionMode do Registry sem vazar outros contratos', () => {
+  const execution = createMissionExecutionSession(mission('running'))
+  const review = createMissionReviewSession(mission('validation'))
+
+  for (const session of [execution, review]) {
+    const definition = resolveResponsibilityDefinition(session.responsibility)
+    assert.equal(session.mode, definition.sessionMode)
+    assert.deepEqual(Object.keys(session), ['responsibility', 'mode', 'missionId'])
+    for (const field of [
+      'sessionMode', 'toolAccess', 'queryTimeoutMs',
+      'watchdogGraceMs', 'requiresModelRoute',
+    ]) assert.equal(Object.hasOwn(session, field), false)
+  }
 })
 
 test('validator genérico falha fechado para descriptors inválidos', () => {

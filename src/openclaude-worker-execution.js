@@ -6,6 +6,10 @@ import {
   resolveOpenClaudeExecutionGuardrails,
 } from './openclaude-execution-guardrails.js'
 import { createOpenClaudeQueryOptions } from './openclaude-query-options.js'
+import {
+  isRegisteredResponsibility,
+  resolveResponsibilityDefinition,
+} from './responsibility-registry.js'
 
 function errorMessage(error) {
   return error instanceof Error ? error.message : String(error)
@@ -36,12 +40,14 @@ export async function executeOpenClaudeQuery(input) {
     throw new Error('prompt não pode ser vazio')
   }
 
-  if (sessionMode !== 'fresh') {
-    throw new Error('modo de sessão OpenClaude não é suportado')
+  if (!isRegisteredResponsibility(responsibility)) {
+    throw new Error('responsabilidade OpenClaude não é suportada')
   }
 
-  if (!['mission-execution', 'mission-review'].includes(responsibility)) {
-    throw new Error('responsabilidade OpenClaude não é suportada')
+  const definition = resolveResponsibilityDefinition(responsibility)
+
+  if (sessionMode !== definition.sessionMode) {
+    throw new Error('modo de sessão OpenClaude não é suportado')
   }
 
   if (typeof model !== 'string' || model.trim() === '') {

@@ -7,10 +7,14 @@ import {
   resolveProjectPathForCreate,
   toProjectPath,
 } from './project-path.js'
+import {
+  isRegisteredResponsibility,
+  resolveResponsibilityDefinition,
+} from './responsibility-registry.js'
 
-const allowedToolsByResponsibility = new Map([
-  ['mission-execution', new Set(['Read', 'Glob', 'Grep', 'Write', 'Edit'])],
-  ['mission-review', new Set(['Read', 'Glob', 'Grep'])],
+const allowedToolsByAccess = new Map([
+  ['read-write', new Set(['Read', 'Glob', 'Grep', 'Write', 'Edit'])],
+  ['read-only', new Set(['Read', 'Glob', 'Grep'])],
 ])
 const protectedDirectoryNames = new Set(['.jzl', '.git', '.openclaude'])
 
@@ -150,10 +154,15 @@ function resolveSearchBase(context, path, requireDirectory) {
 }
 
 export function createOpenClaudeToolPolicy(projectRoot, responsibility) {
-  const allowedTools = allowedToolsByResponsibility.get(responsibility)
+  if (!isRegisteredResponsibility(responsibility)) {
+    throw new Error('responsabilidade OpenClaude não é suportada')
+  }
+
+  const definition = resolveResponsibilityDefinition(responsibility)
+  const allowedTools = allowedToolsByAccess.get(definition.toolAccess)
 
   if (allowedTools === undefined) {
-    throw new Error('responsabilidade OpenClaude não é suportada')
+    throw new Error('perfil de ferramentas OpenClaude não é suportado')
   }
 
   const context = createProjectContext(projectRoot)

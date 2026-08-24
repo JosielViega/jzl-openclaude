@@ -76,7 +76,10 @@ for (const [name, request, expectedError] of [
   ],
   [
     'rejeita sessionMode desconhecido',
-    { prompt: 'teste', sessionMode: 'resume' },
+    {
+      prompt: 'teste', sessionMode: 'resume',
+      responsibility: 'mission-execution',
+    },
     'sessionMode do worker não é suportado',
   ],
 ]) {

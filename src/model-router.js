@@ -2,11 +2,10 @@ import {
   readProjectConfigStore,
   writeProjectConfigStore,
 } from './project-config-store.js'
-
-const supportedResponsibilities = new Set([
-  'mission-execution',
-  'mission-review',
-])
+import {
+  isRegisteredResponsibility,
+  resolveResponsibilityDefinition,
+} from './responsibility-registry.js'
 
 function isObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -18,12 +17,17 @@ function isCanonicalModel(value) {
     && value === value.trim()
 }
 
+function isModelRoutableResponsibility(responsibility) {
+  return isRegisteredResponsibility(responsibility)
+    && resolveResponsibilityDefinition(responsibility).requiresModelRoute
+}
+
 export function validateProjectModelRoute(route) {
   if (!isObject(route)) {
     throw new Error('rota de modelo deve ser um objeto')
   }
 
-  if (!supportedResponsibilities.has(route.responsibility)) {
+  if (!isModelRoutableResponsibility(route.responsibility)) {
     throw new Error('responsabilidade da rota de modelo não é suportada')
   }
 
@@ -35,7 +39,7 @@ export function validateProjectModelRoute(route) {
 }
 
 export function resolveProjectModelRoute(context, responsibility) {
-  if (!supportedResponsibilities.has(responsibility)) {
+  if (!isModelRoutableResponsibility(responsibility)) {
     throw new Error('responsabilidade de modelo não é suportada')
   }
 
@@ -54,7 +58,7 @@ export function configureProjectModel(context, input) {
     throw new Error('configuração de modelo deve ser um objeto')
   }
 
-  if (!supportedResponsibilities.has(input.responsibility)) {
+  if (!isModelRoutableResponsibility(input.responsibility)) {
     throw new Error('responsabilidade de modelo não é suportada')
   }
 

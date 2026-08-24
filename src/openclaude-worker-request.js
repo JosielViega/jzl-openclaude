@@ -1,3 +1,8 @@
+import {
+  isRegisteredResponsibility,
+  resolveResponsibilityDefinition,
+} from './responsibility-registry.js'
+
 export function parseOpenClaudeWorkerRequest(input) {
   if (input.trim() === '') {
     throw new Error('entrada do worker não pode ser vazia')
@@ -37,10 +42,6 @@ export function parseOpenClaudeWorkerRequest(input) {
     throw new Error('sessionMode deve ser uma string')
   }
 
-  if (request.sessionMode !== 'fresh') {
-    throw new Error('sessionMode do worker não é suportado')
-  }
-
   if (!Object.hasOwn(request, 'responsibility')) {
     throw new Error('responsibility é obrigatório')
   }
@@ -49,8 +50,14 @@ export function parseOpenClaudeWorkerRequest(input) {
     throw new Error('responsibility deve ser uma string')
   }
 
-  if (!['mission-execution', 'mission-review'].includes(request.responsibility)) {
+  if (!isRegisteredResponsibility(request.responsibility)) {
     throw new Error('responsibility do worker não é suportada')
+  }
+
+  const definition = resolveResponsibilityDefinition(request.responsibility)
+
+  if (request.sessionMode !== definition.sessionMode) {
+    throw new Error('sessionMode do worker não é suportado')
   }
 
   if (!Object.hasOwn(request, 'model')) {

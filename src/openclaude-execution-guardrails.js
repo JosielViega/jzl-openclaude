@@ -1,24 +1,20 @@
-const guardrailsByResponsibility = {
-  'mission-review': {
-    queryTimeoutMs: 300000,
-    watchdogGraceMs: 5000,
-    workerTimeoutMs: 305000,
-  },
-  'mission-execution': {
-    queryTimeoutMs: 600000,
-    watchdogGraceMs: 5000,
-    workerTimeoutMs: 605000,
-  },
-}
+import {
+  isRegisteredResponsibility,
+  resolveResponsibilityDefinition,
+} from './responsibility-registry.js'
 
 export function resolveOpenClaudeExecutionGuardrails(responsibility) {
-  const guardrails = guardrailsByResponsibility[responsibility]
-
-  if (guardrails === undefined) {
+  if (!isRegisteredResponsibility(responsibility)) {
     throw new Error('responsabilidade OpenClaude não é suportada')
   }
 
-  return { ...guardrails }
+  const definition = resolveResponsibilityDefinition(responsibility)
+
+  return {
+    queryTimeoutMs: definition.queryTimeoutMs,
+    watchdogGraceMs: definition.watchdogGraceMs,
+    workerTimeoutMs: definition.queryTimeoutMs + definition.watchdogGraceMs,
+  }
 }
 
 export function openClaudeExecutionTimeoutMessage(responsibility) {

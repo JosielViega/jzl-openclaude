@@ -1,13 +1,18 @@
 import { isAbsolute } from 'node:path'
 
+import {
+  isRegisteredResponsibility,
+  resolveResponsibilityDefinition,
+} from './responsibility-registry.js'
+
 function isObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
-const supportedModelResponsibilities = new Set([
-  'mission-execution',
-  'mission-review',
-])
+function isModelRoutableResponsibility(responsibility) {
+  return isRegisteredResponsibility(responsibility)
+    && resolveResponsibilityDefinition(responsibility).requiresModelRoute
+}
 
 function validateModels(models) {
   if (!isObject(models)) {
@@ -15,7 +20,7 @@ function validateModels(models) {
   }
 
   for (const [responsibility, model] of Object.entries(models)) {
-    if (!supportedModelResponsibilities.has(responsibility)) {
+    if (!isModelRoutableResponsibility(responsibility)) {
       throw new Error('responsabilidade de modelo da configuração não é suportada')
     }
 

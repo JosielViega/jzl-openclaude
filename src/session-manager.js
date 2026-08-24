@@ -1,4 +1,8 @@
 import { validateMission } from './mission.js'
+import {
+  isRegisteredResponsibility,
+  resolveResponsibilityDefinition,
+} from './responsibility-registry.js'
 
 const missionIdPattern = /^mission-\d{4,}$/
 
@@ -11,11 +15,13 @@ export function validateMissionSession(session) {
     throw new Error('sessão de Mission deve ser um objeto')
   }
 
-  if (!['mission-execution', 'mission-review'].includes(session.responsibility)) {
+  if (!isRegisteredResponsibility(session.responsibility)) {
     throw new Error('responsabilidade da sessão de Mission não é suportada')
   }
 
-  if (session.mode !== 'fresh') {
+  const definition = resolveResponsibilityDefinition(session.responsibility)
+
+  if (session.mode !== definition.sessionMode) {
     throw new Error('modo da sessão de Mission não é suportado')
   }
 
@@ -38,7 +44,9 @@ export function validateMissionExecutionSession(session) {
     throw new Error('responsabilidade da sessão de execução não é suportada')
   }
 
-  if (session.mode !== 'fresh') {
+  const definition = resolveResponsibilityDefinition('mission-execution')
+
+  if (session.mode !== definition.sessionMode) {
     throw new Error('modo da sessão de execução não é suportado')
   }
 
@@ -61,7 +69,9 @@ export function validateMissionReviewSession(session) {
     throw new Error('responsabilidade da sessão de revisão não é suportada')
   }
 
-  if (session.mode !== 'fresh') {
+  const definition = resolveResponsibilityDefinition('mission-review')
+
+  if (session.mode !== definition.sessionMode) {
     throw new Error('modo da sessão de revisão não é suportado')
   }
 
@@ -82,9 +92,11 @@ export function createMissionExecutionSession(mission) {
     throw new Error('Mission deve estar running para criar sessão de execução')
   }
 
+  const definition = resolveResponsibilityDefinition('mission-execution')
+
   return {
     responsibility: 'mission-execution',
-    mode: 'fresh',
+    mode: definition.sessionMode,
     missionId: mission.id,
   }
 }
@@ -96,9 +108,11 @@ export function createMissionReviewSession(mission) {
     throw new Error('Mission deve estar validation para criar sessão de revisão')
   }
 
+  const definition = resolveResponsibilityDefinition('mission-review')
+
   return {
     responsibility: 'mission-review',
-    mode: 'fresh',
+    mode: definition.sessionMode,
     missionId: mission.id,
   }
 }

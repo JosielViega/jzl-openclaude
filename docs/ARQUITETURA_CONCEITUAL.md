@@ -34,6 +34,10 @@ Determina os padrões aplicáveis ao projeto e a uma Mission, de forma previsív
 
 Constrói o contexto mínimo necessário para uma responsabilidade. Seleciona instruções, padrões, estado e artefatos relevantes sem compartilhar transcripts automaticamente.
 
+### Responsibility Registry
+
+Mantém os contratos determinísticos das responsabilidades suportadas: modo de sessão, classe de acesso a ferramentas, budget temporal e necessidade de rota de modelo. Evita que diferentes componentes mantenham listas independentes de responsabilidades. Não executa Missions, não escolhe modelos, não controla o filesystem e não cria Sessions.
+
 ### Session Manager
 
 Cria e acompanha sessões isoladas por responsabilidade. Mantém seus limites e encaminha a comunicação entre responsabilidades por Handoffs estruturados.
