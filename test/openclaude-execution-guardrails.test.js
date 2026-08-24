@@ -10,6 +10,7 @@ import {
 test('resolve limites fixos de review e execution em objetos detached', () => {
   const review = resolveOpenClaudeExecutionGuardrails('mission-review')
   const execution = resolveOpenClaudeExecutionGuardrails('mission-execution')
+  const planning = resolveOpenClaudeExecutionGuardrails('mission-planning')
 
   assert.deepEqual(review, {
     queryTimeoutMs: 300000, watchdogGraceMs: 5000, workerTimeoutMs: 305000,
@@ -17,8 +18,12 @@ test('resolve limites fixos de review e execution em objetos detached', () => {
   assert.deepEqual(execution, {
     queryTimeoutMs: 600000, watchdogGraceMs: 5000, workerTimeoutMs: 605000,
   })
+  assert.deepEqual(planning, {
+    queryTimeoutMs: 300000, watchdogGraceMs: 5000, workerTimeoutMs: 305000,
+  })
   assert.equal(review.workerTimeoutMs, review.queryTimeoutMs + review.watchdogGraceMs)
   assert.equal(execution.workerTimeoutMs, execution.queryTimeoutMs + execution.watchdogGraceMs)
+  assert.equal(planning.workerTimeoutMs, planning.queryTimeoutMs + planning.watchdogGraceMs)
   review.queryTimeoutMs = 1
   assert.equal(resolveOpenClaudeExecutionGuardrails('mission-review').queryTimeoutMs, 300000)
 })
@@ -34,6 +39,10 @@ test('produz mensagens determinísticas por responsabilidade', () => {
   assert.equal(
     openClaudeExecutionTimeoutMessage('mission-review'),
     'tempo limite da sessão mission-review excedido',
+  )
+  assert.equal(
+    openClaudeExecutionTimeoutMessage('mission-planning'),
+    'tempo limite da sessão mission-planning excedido',
   )
   assert.equal(
     openClaudeExecutionTimeoutMessage('mission-execution'),

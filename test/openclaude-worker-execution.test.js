@@ -42,6 +42,17 @@ test('limpa deadline quando a preparação falha antes de query', async () => {
   })
 })
 
+test('planning é reconhecido antes da validação determinística de projectRoot', async () => {
+  await assert.rejects(executeOpenClaudeQuery({
+    projectRoot: 'relative/path', prompt: 'planejar', sessionMode: 'fresh',
+    responsibility: 'mission-planning', model: 'model-plan',
+  }), (error) => {
+    assert.ok(error instanceof OpenClaudeQueryExecutionError)
+    assert.equal(error.message, 'projectRoot deve ser um caminho absoluto')
+    return true
+  })
+})
+
 test('rejeita model OpenClaude inválido antes de query', async () => {
   for (const model of [undefined, null, 1, '   ']) {
     await assert.rejects(executeOpenClaudeQuery({

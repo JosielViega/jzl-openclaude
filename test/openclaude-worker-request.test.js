@@ -99,6 +99,14 @@ test('aceita responsibility mission-review', () => {
   })
 })
 
+test('aceita responsibility mission-planning em sessão fresh', () => {
+  assert.deepEqual(parseOpenClaudeWorkerRequest(JSON.stringify({
+    prompt: 'planejar', sessionMode: 'fresh', responsibility: 'mission-planning', model: 'plan-model',
+  })), {
+    prompt: 'planejar', sessionMode: 'fresh', responsibility: 'mission-planning', model: 'plan-model',
+  })
+})
+
 for (const [name, responsibility, message] of [
   ['ausente', undefined, 'responsibility é obrigatório'],
   ['não string', 1, 'responsibility deve ser uma string'],

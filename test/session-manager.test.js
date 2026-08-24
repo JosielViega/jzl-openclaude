@@ -4,8 +4,10 @@ import { test } from 'node:test'
 import {
   createMissionExecutionSession,
   createMissionReviewSession,
+  createMissionPlanningSession,
   validateMissionExecutionSession,
   validateMissionReviewSession,
+  validateMissionPlanningSession,
   validateMissionSession,
 } from '../src/session-manager.js'
 import { resolveResponsibilityDefinition } from '../src/responsibility-registry.js'
@@ -33,6 +35,37 @@ test('cria sessão fresh de revisão para Mission validation sem mutar', () => {
   assert.deepEqual(validationMission, snapshot)
 })
 
+test('cria e valida sessão fresh de planejamento para Mission pending', () => {
+  const pendingMission = mission('pending')
+  const snapshot = structuredClone(pendingMission)
+  const session = createMissionPlanningSession(pendingMission)
+  assert.deepEqual(session, {
+    responsibility: 'mission-planning', mode: 'fresh', missionId: 'mission-0001',
+  })
+  assert.strictEqual(validateMissionPlanningSession(session), session)
+  assert.strictEqual(validateMissionSession(session), session)
+  assert.deepEqual(pendingMission, snapshot)
+})
+
+for (const status of ['running', 'failed', 'correction', 'validation', 'completed']) {
+  test(`rejeita Mission ${status} para sessão de planejamento`, () => {
+    assert.throws(() => createMissionPlanningSession(mission(status)), {
+      message: 'Mission deve estar pending para criar sessão de planejamento',
+    })
+  })
+}
+
+for (const [value, message] of [
+  [null, 'sessão de planejamento deve ser um objeto'],
+  [{ responsibility: 'mission-review', mode: 'fresh', missionId: 'mission-0001' }, 'responsabilidade da sessão de planejamento não é suportada'],
+  [{ responsibility: 'mission-planning', mode: 'resume', missionId: 'mission-0001' }, 'modo da sessão de planejamento não é suportado'],
+  [{ responsibility: 'mission-planning', mode: 'fresh', missionId: 'mission-1' }, 'missionId da sessão de planejamento é inválido'],
+]) {
+  test(`rejeita sessão de planejamento inválida: ${message}`, () => {
+    assert.throws(() => validateMissionPlanningSession(value), { message })
+  })
+}
+
 for (const status of ['pending', 'running', 'failed', 'correction', 'completed']) {
   test(`rejeita Mission ${status} para sessão de revisão`, () => {
     assert.throws(
@@ -42,12 +75,14 @@ for (const status of ['pending', 'running', 'failed', 'correction', 'completed']
   })
 }
 
-test('validator genérico aceita execution e review fresh', () => {
+test('validator genérico aceita execution, review e planning fresh', () => {
   const execution = createMissionExecutionSession(mission('running'))
   const review = createMissionReviewSession(mission('validation'))
+  const planning = createMissionPlanningSession(mission('pending'))
 
   assert.strictEqual(validateMissionSession(execution), execution)
   assert.strictEqual(validateMissionSession(review), review)
+  assert.strictEqual(validateMissionSession(planning), planning)
 })
 
 test('descriptors usam sessionMode do Registry sem vazar outros contratos', () => {

@@ -87,6 +87,16 @@ test('aceita descriptor mission-review e valida projectRoot antes do worker', as
   }), { message: 'projectRoot deve ser um caminho absoluto' })
 })
 
+test('aceita descriptor mission-planning e rota correspondente antes do worker', async () => {
+  await assert.rejects(executeOpenClaudeText({
+    projectRoot: 'relative/path', prompt: 'planejar',
+    session: {
+      responsibility: 'mission-planning', mode: 'fresh', missionId: 'mission-0001',
+    },
+    modelRoute: { responsibility: 'mission-planning', model: 'model-plan' },
+  }), { message: 'projectRoot deve ser um caminho absoluto' })
+})
+
 test('valida rota de modelo e vínculo com responsabilidade antes do worker', async () => {
   const session = {
     responsibility: 'mission-execution', mode: 'fresh', missionId: 'mission-0001',

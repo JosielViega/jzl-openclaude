@@ -85,6 +85,31 @@ export function validateMissionReviewSession(session) {
   return session
 }
 
+export function validateMissionPlanningSession(session) {
+  if (!isObject(session)) {
+    throw new Error('sessão de planejamento deve ser um objeto')
+  }
+
+  if (session.responsibility !== 'mission-planning') {
+    throw new Error('responsabilidade da sessão de planejamento não é suportada')
+  }
+
+  const definition = resolveResponsibilityDefinition('mission-planning')
+
+  if (session.mode !== definition.sessionMode) {
+    throw new Error('modo da sessão de planejamento não é suportado')
+  }
+
+  if (
+    typeof session.missionId !== 'string'
+    || !missionIdPattern.test(session.missionId)
+  ) {
+    throw new Error('missionId da sessão de planejamento é inválido')
+  }
+
+  return session
+}
+
 export function createMissionExecutionSession(mission) {
   validateMission(mission)
 
@@ -112,6 +137,22 @@ export function createMissionReviewSession(mission) {
 
   return {
     responsibility: 'mission-review',
+    mode: definition.sessionMode,
+    missionId: mission.id,
+  }
+}
+
+export function createMissionPlanningSession(mission) {
+  validateMission(mission)
+
+  if (mission.status !== 'pending') {
+    throw new Error('Mission deve estar pending para criar sessão de planejamento')
+  }
+
+  const definition = resolveResponsibilityDefinition('mission-planning')
+
+  return {
+    responsibility: 'mission-planning',
     mode: definition.sessionMode,
     missionId: mission.id,
   }

@@ -98,6 +98,33 @@ export function recordMissionReviewCorrectionRequested(context, input) {
   })
 }
 
+export function recordMissionPlanFinished(context, input) {
+  return appendProjectEvent(context, {
+    type: 'mission.plan.finished',
+    missionId: input.missionId,
+    data: {
+      sessionId: input.plan.sessionId,
+      model: input.plan.model,
+      summary: input.plan.summary,
+      steps: input.plan.steps,
+      risks: input.plan.risks,
+      validation: input.plan.validation,
+    },
+  })
+}
+
+export function recordMissionPlanUnavailable(context, input) {
+  return appendProjectEvent(context, {
+    type: 'mission.plan.unavailable',
+    missionId: input.missionId,
+    data: {
+      sessionId: input.sessionId,
+      model: input.model,
+      errorMessage: errorMessage(input.error),
+    },
+  })
+}
+
 export function listProjectHistory(context, missionId) {
   if (
     missionId !== undefined

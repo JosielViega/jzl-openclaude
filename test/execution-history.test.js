@@ -11,6 +11,8 @@ import {
   recordMissionReviewFinished,
   recordMissionReviewCorrectionRequested,
   recordMissionReviewUnavailable,
+  recordMissionPlanFinished,
+  recordMissionPlanUnavailable,
   recordMissionValidationFinished,
   recordMissionValidationUnavailable,
 } from '../src/execution-history.js'
@@ -197,5 +199,46 @@ test('registra autorização de correção por revisão sem alterar State', (t) 
   assert.equal(event.type, 'mission.review.correction.requested')
   assert.deepEqual(event.data, {
     reviewEventId: 'event-000123', fromStatus: 'validation', toStatus: 'correction',
+  })
+})
+
+test('registra planejamento finished sem transição de workflow', (t) => {
+  const context = createContext(t)
+  const event = recordMissionPlanFinished(context, {
+    missionId: 'mission-0001',
+    plan: {
+      sessionId: 'plan-session', model: 'plan-model', summary: 'Plano.',
+      steps: [{ title: 'Passo', detail: 'Detalhe', paths: ['src/app.js'] }],
+      risks: [], validation: ['npm test'],
+    },
+  })
+  assert.equal(event.type, 'mission.plan.finished')
+  assert.equal(event.data.model, 'plan-model')
+  assert.equal(Object.hasOwn(event.data, 'fromStatus'), false)
+  assert.equal(Object.hasOwn(event.data, 'toStatus'), false)
+})
+
+test('registra planejamento unavailable normalizando somente a mensagem', (t) => {
+  const context = createContext(t)
+  const error = new Error('planejamento falhou')
+  error.cause = new Error('segredo')
+  const event = recordMissionPlanUnavailable(context, {
+    missionId: 'mission-0001', sessionId: null, model: null, error,
+  })
+  assert.deepEqual(event.data, {
+    sessionId: null, model: null, errorMessage: 'planejamento falhou',
+  })
+  assert.equal(JSON.stringify(event).includes('stack'), false)
+  assert.equal(JSON.stringify(event).includes('segredo'), false)
+})
+
+test('planning unavailable audita model e session conhecidos', (t) => {
+  const context = createContext(t)
+  const event = recordMissionPlanUnavailable(context, {
+    missionId: 'mission-0001', sessionId: 'plan-session', model: 'plan-model',
+    error: 'timeout',
+  })
+  assert.deepEqual(event.data, {
+    sessionId: 'plan-session', model: 'plan-model', errorMessage: 'timeout',
   })
 })

@@ -205,6 +205,44 @@ test('valida review unavailable e preserva campos aditivos', () => {
   assert.equal(value.data.extra, true)
 })
 
+test('aceita eventos canônicos de planejamento sem transição', () => {
+  const finished = event('mission.plan.finished', {
+    sessionId: 'plan-session', model: 'plan-model', summary: 'Plano.',
+    steps: [{ title: 'Passo', detail: 'Detalhe', paths: ['src/app.js'] }],
+    risks: [], validation: ['npm test'], extra: true,
+  })
+  const unavailable = event('mission.plan.unavailable', {
+    sessionId: null, model: null, errorMessage: 'indisponível', extra: true,
+  })
+  assert.strictEqual(validateProjectEvent(finished), finished)
+  assert.strictEqual(validateProjectEvent(unavailable), unavailable)
+  assert.equal(Object.hasOwn(finished.data, 'fromStatus'), false)
+  assert.equal(Object.hasOwn(finished.data, 'toStatus'), false)
+})
+
+test('valida identidade e resultado de planning finished', () => {
+  const base = {
+    sessionId: 'plan-session', model: 'plan-model', summary: 'Plano.',
+    steps: [{ title: 'Passo', detail: 'Detalhe', paths: [] }], risks: [], validation: [],
+  }
+  for (const [data, message] of [
+    [{ ...base, sessionId: '' }, 'sessionId do evento de planejamento é inválido'],
+    [{ ...base, model: '' }, 'model do evento de planejamento é inválido'],
+    [{ ...base, summary: '' }, 'summary do planejamento é inválido'],
+    [{ ...base, steps: [] }, 'steps do planejamento deve ser um array não vazio'],
+  ]) assert.throws(() => validateProjectEvent(event('mission.plan.finished', data)), { message })
+})
+
+test('planning unavailable exige propriedades nullable e mensagem', () => {
+  for (const [data, message] of [
+    [{ model: null, errorMessage: 'x' }, 'sessionId do evento de planejamento é inválido'],
+    [{ sessionId: null, errorMessage: 'x' }, 'model do evento de planejamento é inválido'],
+    [{ sessionId: '', model: null, errorMessage: 'x' }, 'sessionId do evento de planejamento é inválido'],
+    [{ sessionId: null, model: '', errorMessage: 'x' }, 'model do evento de planejamento é inválido'],
+    [{ sessionId: null, model: null, errorMessage: '' }, 'errorMessage do evento de planejamento é inválido'],
+  ]) assert.throws(() => validateProjectEvent(event('mission.plan.unavailable', data)), { message })
+})
+
 test('aceita pedido de correção por revisão e campos aditivos', () => {
   const value = event('mission.review.correction.requested', {
     reviewEventId: 'event-000123', fromStatus: 'validation',

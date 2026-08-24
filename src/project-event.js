@@ -1,4 +1,5 @@
 import { validateMissionReviewResult } from './mission-review-result.js'
+import { validateMissionPlanningResult } from './mission-planning-result.js'
 
 const eventIdPattern = /^event-\d{6,}$/
 const missionIdPattern = /^mission-\d{4,}$/
@@ -9,6 +10,8 @@ const supportedTypes = new Set([
   'mission.review.finished',
   'mission.review.unavailable',
   'mission.review.correction.requested',
+  'mission.plan.finished',
+  'mission.plan.unavailable',
 ])
 const executionFromStatuses = new Set(['pending', 'failed', 'correction'])
 const validationOutcomes = new Set(['PASS', 'FAIL', 'ERROR'])
@@ -212,6 +215,37 @@ function validateReviewCorrectionRequestedData(data) {
   }
 }
 
+function validatePlanningIdentity(data) {
+  if (!isNonEmptyString(data.sessionId)) {
+    throw new Error('sessionId do evento de planejamento é inválido')
+  }
+  if (!isNonEmptyString(data.model)) {
+    throw new Error('model do evento de planejamento é inválido')
+  }
+}
+
+function validatePlanFinishedData(data) {
+  validatePlanningIdentity(data)
+  validateMissionPlanningResult({
+    summary: data.summary,
+    steps: data.steps,
+    risks: data.risks,
+    validation: data.validation,
+  })
+}
+
+function validatePlanUnavailableData(data) {
+  if (!Object.hasOwn(data, 'sessionId') || (data.sessionId !== null && !isNonEmptyString(data.sessionId))) {
+    throw new Error('sessionId do evento de planejamento é inválido')
+  }
+  if (!Object.hasOwn(data, 'model') || (data.model !== null && !isNonEmptyString(data.model))) {
+    throw new Error('model do evento de planejamento é inválido')
+  }
+  if (!isNonEmptyString(data.errorMessage)) {
+    throw new Error('errorMessage do evento de planejamento é inválido')
+  }
+}
+
 export function validateProjectEvent(event) {
   if (!isObject(event)) {
     throw new Error('evento deve ser um objeto')
@@ -271,8 +305,12 @@ export function validateProjectEvent(event) {
     validateReviewFinishedData(event.data)
   } else if (event.type === 'mission.review.unavailable') {
     validateReviewUnavailableData(event.data)
-  } else {
+  } else if (event.type === 'mission.review.correction.requested') {
     validateReviewCorrectionRequestedData(event.data)
+  } else if (event.type === 'mission.plan.finished') {
+    validatePlanFinishedData(event.data)
+  } else {
+    validatePlanUnavailableData(event.data)
   }
 
   return event

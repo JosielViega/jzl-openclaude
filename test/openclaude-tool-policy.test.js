@@ -85,6 +85,29 @@ test('autoriza Read de arquivo interno e AGENTS.md', async () => {
   )
 })
 
+test('mission-planning herda perfil read-only e segurança de paths do Registry', async () => {
+  const planningPolicy = createOpenClaudeToolPolicy(projectRoot, 'mission-planning')
+  assert.equal((await planningPolicy('Read', {
+    file_path: join(projectRoot, 'src', 'inside.txt'),
+  })).behavior, 'allow')
+  assert.equal((await planningPolicy('Glob', {
+    pattern: '**/*.txt', path: projectRoot,
+  })).behavior, 'allow')
+  assert.equal((await planningPolicy('Grep', {
+    pattern: 'inside', path: projectRoot,
+  })).behavior, 'allow')
+  for (const [name, input] of [
+    ['Write', { file_path: join(projectRoot, 'src', 'new.txt'), content: 'x' }],
+    ['Edit', { file_path: join(projectRoot, 'src', 'inside.txt') }],
+    ['Bash', { command: 'echo no' }],
+    ['Agent', {}],
+    ['unknown', {}],
+  ]) assert.equal((await planningPolicy(name, input)).behavior, 'deny')
+  assert.equal((await planningPolicy('Read', {
+    file_path: join(externalRoot, 'outside.txt'),
+  })).behavior, 'deny')
+})
+
 test('autoriza Write interno novo e existente sem escrever', async () => {
   assert.equal(statSync(join(projectRoot, 'src', 'inside.txt')).nlink, 1)
   assert.deepEqual(

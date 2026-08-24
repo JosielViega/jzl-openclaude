@@ -36,7 +36,7 @@ Constrói o contexto mínimo necessário para uma responsabilidade. Seleciona in
 
 ### Responsibility Registry
 
-Mantém os contratos determinísticos das responsabilidades suportadas: modo de sessão, classe de acesso a ferramentas, budget temporal e necessidade de rota de modelo. Evita que diferentes componentes mantenham listas independentes de responsabilidades. Não executa Missions, não escolhe modelos, não controla o filesystem e não cria Sessions.
+Mantém os contratos determinísticos das responsabilidades suportadas — execução, revisão e planejamento de Mission — incluindo modo de sessão, classe de acesso a ferramentas, budget temporal e necessidade de rota de modelo. Evita que diferentes componentes mantenham listas independentes de responsabilidades. Não executa Missions, não escolhe modelos, não controla o filesystem e não cria Sessions.
 
 ### Session Manager
 
@@ -69,6 +69,10 @@ Valida e processa Handoffs estruturados entre responsabilidades. Transfere resul
 ### Mission Review
 
 A Mission Review é consultiva e não possui autoridade sobre o workflow. Um resultado `CONCERNS` só pode originar uma transição para correção após autorização explícita do Host/JZL; a execução seguinte recebe um Handoff estruturado, sem compartilhamento de transcript.
+
+### Mission Planning
+
+O Mission Planning é uma responsabilidade probabilística consultiva que produz um plano estruturado para uma Mission `pending` e pronta, em sessão fresh e somente leitura. O resultado é auditado no Event Log sem autorizar execução, implementar mudanças ou realizar transições de workflow. No v1, não compartilha transcript e não cria Plan Handoff.
 
 ### Execution History / Event Log
 

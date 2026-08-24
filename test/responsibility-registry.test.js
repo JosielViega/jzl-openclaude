@@ -30,18 +30,27 @@ const expectedDefinitions = {
     watchdogGraceMs: 5000,
     requiresModelRoute: true,
   },
+  'mission-planning': {
+    responsibility: 'mission-planning',
+    sessionMode: 'fresh',
+    toolAccess: 'read-only',
+    queryTimeoutMs: 300000,
+    watchdogGraceMs: 5000,
+    requiresModelRoute: true,
+  },
 }
 
-test('registra somente execution e review', () => {
+test('registra execution, review e planning', () => {
   assert.equal(isRegisteredResponsibility('mission-execution'), true)
   assert.equal(isRegisteredResponsibility('mission-review'), true)
+  assert.equal(isRegisteredResponsibility('mission-planning'), true)
 
   for (const value of [undefined, null, 1, [], {}, 'other']) {
     assert.equal(isRegisteredResponsibility(value), false)
   }
 })
 
-test('resolve os dois contratos com shapes exatos', () => {
+test('resolve os três contratos com shapes exatos', () => {
   for (const responsibility of listRegisteredResponsibilities()) {
     assert.deepEqual(
       resolveResponsibilityDefinition(responsibility),
@@ -69,12 +78,12 @@ test('definitions retornadas são detached do Registry', () => {
 
 test('lista é determinística e detached', () => {
   const responsibilities = listRegisteredResponsibilities()
-  assert.deepEqual(responsibilities, ['mission-execution', 'mission-review'])
+  assert.deepEqual(responsibilities, ['mission-execution', 'mission-review', 'mission-planning'])
   responsibilities.reverse()
   responsibilities.push('other')
   assert.deepEqual(
     listRegisteredResponsibilities(),
-    ['mission-execution', 'mission-review'],
+    ['mission-execution', 'mission-review', 'mission-planning'],
   )
 })
 

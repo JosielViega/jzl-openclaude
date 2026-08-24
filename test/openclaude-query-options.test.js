@@ -111,6 +111,23 @@ test('review mantém QueryOptions mínimas e nega Write', async () => {
   })).behavior, 'deny')
 })
 
+test('planning mantém QueryOptions mínimas e read-only', async () => {
+  const options = createOpenClaudeQueryOptions(
+    temporaryDirectory, 'mission-planning', abortController, 'model-plan',
+  )
+  assert.deepEqual(Object.keys(options).sort(), ['abortController', 'canUseTool', 'cwd', 'model'])
+  assert.equal((await options.canUseTool('Read', {
+    file_path: join(temporaryDirectory, 'inside.txt'),
+  })).behavior, 'allow')
+  for (const [tool, input] of [
+    ['Write', { file_path: join(temporaryDirectory, 'new.txt'), content: 'x' }],
+    ['Edit', { file_path: join(temporaryDirectory, 'inside.txt'), old_string: 'x', new_string: 'y' }],
+    ['Bash', { command: 'echo no' }],
+    ['Agent', {}],
+    ['Unknown', {}],
+  ]) assert.equal((await options.canUseTool(tool, input)).behavior, 'deny')
+})
+
 test('rejeita AbortController ausente ou inválido', () => {
   for (const value of [undefined, null, {}, new AbortController().signal]) {
     assert.throws(

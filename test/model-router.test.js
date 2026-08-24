@@ -24,8 +24,8 @@ function setup(t, input = { template: 'traditional-web' }) {
   return context
 }
 
-test('valida rotas execution e review pela mesma referência', () => {
-  for (const responsibility of ['mission-execution', 'mission-review']) {
+test('valida rotas execution, review e planning pela mesma referência', () => {
+  for (const responsibility of ['mission-execution', 'mission-review', 'mission-planning']) {
     const route = { responsibility, model: 'provider/model:tag?x=y', extra: true }
     assert.strictEqual(validateProjectModelRoute(route), route)
   }
@@ -60,6 +60,16 @@ test('resolve rotas parciais e retorna objetos detached', (t) => {
   assert.equal(readProjectConfigStore(context).models['mission-execution'], 'model-a')
   assert.throws(() => resolveProjectModelRoute(context, 'other'), {
     message: 'responsabilidade de modelo não é suportada',
+  })
+})
+
+test('configura e resolve rota explícita de planning', (t) => {
+  const context = setup(t)
+  assert.deepEqual(configureProjectModel(context, {
+    responsibility: 'mission-planning', model: '  model-plan  ',
+  }), { responsibility: 'mission-planning', model: 'model-plan' })
+  assert.deepEqual(resolveProjectModelRoute(context, 'mission-planning'), {
+    responsibility: 'mission-planning', model: 'model-plan',
   })
 })
 

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
 import {
+  existsSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -193,6 +194,10 @@ test('set-model persiste rotas explícitas por responsabilidade', (t) => {
     'set-model', '--project-root', root,
     '--responsibility', 'mission-review', '--model', 'model-b',
   ]).output
+  const planning = runJsonCli([
+    'set-model', '--project-root', root,
+    '--responsibility', 'mission-planning', '--model', 'model-c',
+  ]).output
 
   assert.deepEqual(execution, {
     responsibility: 'mission-execution', model: 'model-a',
@@ -200,9 +205,12 @@ test('set-model persiste rotas explícitas por responsabilidade', (t) => {
   assert.deepEqual(review, {
     responsibility: 'mission-review', model: 'model-b',
   })
+  assert.deepEqual(planning, {
+    responsibility: 'mission-planning', model: 'model-c',
+  })
   assert.deepEqual(
     JSON.parse(readFileSync(join(root, '.jzl', 'config.json'), 'utf8')).models,
-    { 'mission-execution': 'model-a', 'mission-review': 'model-b' },
+    { 'mission-execution': 'model-a', 'mission-review': 'model-b', 'mission-planning': 'model-c' },
   )
 })
 
@@ -449,6 +457,65 @@ test('review-mission registra unavailable quando Config está ausente', (t) => {
   const [event] = readProjectEventStore(context).events
   assert.equal(event.type, 'mission.review.unavailable')
   assert.equal(event.data.sessionId, null)
+})
+
+test('plan-mission exige flags singulares e rejeita opções desconhecidas', () => {
+  for (const [argumentsList, message] of [
+    [['plan-mission', '--mission', 'mission-0001'], '--project-root é obrigatório'],
+    [['plan-mission', '--project-root', 'root'], '--mission é obrigatório'],
+    [['plan-mission', '--project-root', 'root', '--mission', 'mission-0001', '--other', 'x'], 'argumento desconhecido: --other'],
+    [['plan-mission', '--project-root', 'root', '--mission', 'mission-0001', '--mission', 'mission-0002'], 'opção duplicada: --mission'],
+  ]) {
+    const result = runCli(argumentsList)
+    assert.equal(result.status, 1)
+    assert.equal(result.stdout, '')
+    assert.equal(result.stderr.trim(), message)
+  }
+})
+
+test('plan-mission rejeita status não pending antes do modelo', (t) => {
+  const root = createRoot(t)
+  const context = createProjectContext(root)
+  initializeProjectStateStore(context)
+  writeProjectStateStore(context, {
+    schemaVersion: 1,
+    missions: [{ id: 'mission-0001', title: 'A', objective: 'A', status: 'running', dependencies: [] }],
+  })
+  const result = runCli(['plan-mission', '--project-root', root, '--mission', 'mission-0001'])
+  assert.equal(result.status, 1)
+  assert.equal(result.stderr.trim(), 'Mission deve estar pending para planejamento')
+})
+
+test('plan-mission rejeita Mission bloqueada sem criar evento', (t) => {
+  const root = createRoot(t)
+  const context = createProjectContext(root)
+  initializeProjectStateStore(context)
+  writeProjectStateStore(context, {
+    schemaVersion: 1,
+    missions: [
+      { id: 'mission-0001', title: 'A', objective: 'A', status: 'pending', dependencies: ['mission-0002'] },
+      { id: 'mission-0002', title: 'B', objective: 'B', status: 'pending', dependencies: [] },
+    ],
+  })
+  const result = runCli(['plan-mission', '--project-root', root, '--mission', 'mission-0001'])
+  assert.equal(result.status, 1)
+  assert.equal(result.stderr.trim(), 'Mission deve estar pronta para planejamento')
+  assert.equal(existsSync(join(root, '.jzl', 'events.json')), false)
+})
+
+test('plan-mission pronta sem modelo registra unavailable e preserva pending', (t) => {
+  const root = createRoot(t)
+  initProject(root)
+  const mission = runJsonCli([
+    'create-mission', '--project-root', root, '--title', 'A', '--objective', 'A',
+  ]).output
+  const result = runCli(['plan-mission', '--project-root', root, '--mission', mission.id])
+  assert.equal(result.status, 1)
+  assert.equal(result.stdout, '')
+  assert.equal(result.stderr.trim(), 'modelo não configurado para responsabilidade mission-planning')
+  const context = createProjectContext(root)
+  assert.equal(readProjectStateStore(context).missions[0].status, 'pending')
+  assert.equal(readProjectEventStore(context).events[0].type, 'mission.plan.unavailable')
 })
 
 test('request-review-correction exige flags singulares', () => {

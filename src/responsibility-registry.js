@@ -15,6 +15,14 @@ const definitions = Object.freeze({
     watchdogGraceMs: 5000,
     requiresModelRoute: true,
   }),
+  'mission-planning': Object.freeze({
+    responsibility: 'mission-planning',
+    sessionMode: 'fresh',
+    toolAccess: 'read-only',
+    queryTimeoutMs: 300000,
+    watchdogGraceMs: 5000,
+    requiresModelRoute: true,
+  }),
 })
 
 export function isRegisteredResponsibility(value) {

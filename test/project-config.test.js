@@ -104,7 +104,8 @@ test('models opcional aceita vazio, parcial, completo e IDs opacos', () => {
     {},
     { 'mission-execution': 'qwen3.5-9b' },
     { 'mission-review': 'provider/model:tag?x=y' },
-    { 'mission-execution': 'model-a', 'mission-review': 'model-b' },
+    { 'mission-planning': 'model-plan' },
+    { 'mission-execution': 'model-a', 'mission-review': 'model-b', 'mission-planning': 'model-c' },
   ]) {
     const config = { schemaVersion: 1, template: 'traditional-web', tools: {}, models }
     assert.strictEqual(validateProjectConfig(config), config)
