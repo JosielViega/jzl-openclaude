@@ -8,6 +8,7 @@ const supportedTypes = new Set([
   'mission.validation.unavailable',
   'mission.review.finished',
   'mission.review.unavailable',
+  'mission.review.correction.requested',
 ])
 const executionFromStatuses = new Set(['pending', 'failed', 'correction'])
 const validationOutcomes = new Set(['PASS', 'FAIL', 'ERROR'])
@@ -174,6 +175,19 @@ function validateReviewUnavailableData(data) {
   }
 }
 
+function validateReviewCorrectionRequestedData(data) {
+  if (
+    typeof data.reviewEventId !== 'string'
+    || !eventIdPattern.test(data.reviewEventId)
+  ) {
+    throw new Error('reviewEventId do pedido de correção por revisão é inválido')
+  }
+
+  if (data.fromStatus !== 'validation' || data.toStatus !== 'correction') {
+    throw new Error('mapeamento do pedido de correção por revisão é incoerente')
+  }
+}
+
 export function validateProjectEvent(event) {
   if (!isObject(event)) {
     throw new Error('evento deve ser um objeto')
@@ -231,8 +245,10 @@ export function validateProjectEvent(event) {
     validateUnavailableData(event.data)
   } else if (event.type === 'mission.review.finished') {
     validateReviewFinishedData(event.data)
-  } else {
+  } else if (event.type === 'mission.review.unavailable') {
     validateReviewUnavailableData(event.data)
+  } else {
+    validateReviewCorrectionRequestedData(event.data)
   }
 
   return event

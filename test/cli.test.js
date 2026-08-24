@@ -404,6 +404,87 @@ test('review-mission registra unavailable quando Config está ausente', (t) => {
   assert.equal(event.data.sessionId, null)
 })
 
+test('request-review-correction exige flags singulares', () => {
+  for (const [argumentsList, message] of [
+    [['request-review-correction', '--project-root', 'root', '--review-event', 'event-000001'], '--mission é obrigatório'],
+    [['request-review-correction', '--project-root', 'root', '--mission', 'mission-0001'], '--review-event é obrigatório'],
+    [['request-review-correction', '--project-root', 'root', '--mission', 'mission-0001', '--review-event', 'event-000001', '--review-event', 'event-000002'], 'opção duplicada: --review-event'],
+    [['request-review-correction', '--project-root', 'root', '--mission', 'mission-0001', '--review-event', 'event-000001', '--other', 'x'], 'argumento desconhecido: --other'],
+  ]) {
+    const result = runCli(argumentsList)
+    assert.equal(result.status, 1)
+    assert.equal(result.stdout, '')
+    assert.equal(result.stderr.trim(), message)
+  }
+})
+
+test('request-review-correction autoriza CONCERNS atual e imprime um JSON', (t) => {
+  const root = createRoot(t)
+  const context = createProjectContext(root)
+  initializeProjectStateStore(context)
+  writeProjectStateStore(context, {
+    schemaVersion: 1,
+    missions: [{ id: 'mission-0001', title: 'A', objective: 'A', status: 'validation', dependencies: [] }],
+  })
+  appendProjectEvent(context, {
+    type: 'mission.execution.finished', missionId: 'mission-0001',
+    data: { outcome: 'SUCCESS', fromStatus: 'pending', toStatus: 'validation', sessionId: 'execution', result: 'ok' },
+  })
+  const review = appendProjectEvent(context, {
+    type: 'mission.review.finished', missionId: 'mission-0001',
+    data: {
+      sessionId: 'review', verdict: 'CONCERNS', summary: 'problema',
+      findings: [{ severity: 'HIGH', title: 'Falha', detail: 'Detalhe', paths: ['index.php'] }],
+    },
+  })
+
+  const { result, output } = runJsonCli([
+    'request-review-correction', '--project-root', root,
+    '--mission', 'mission-0001', '--review-event', review.id,
+  ])
+  assert.equal(result.stdout.trim().split(/\r?\n/).length, 1)
+  assert.equal(output.mission.status, 'correction')
+  assert.equal(output.authorizationEvent.data.reviewEventId, review.id)
+})
+
+for (const [name, verdict, stale, message] of [
+  ['PASS', 'PASS', false, 'revisão não possui CONCERNS para correção'],
+  ['review stale', 'CONCERNS', true, 'revisão não pertence ao ciclo atual de execução da Mission'],
+]) {
+  test(`request-review-correction rejeita ${name}`, (t) => {
+    const root = createRoot(t)
+    const context = createProjectContext(root)
+    initializeProjectStateStore(context)
+    writeProjectStateStore(context, {
+      schemaVersion: 1,
+      missions: [{ id: 'mission-0001', title: 'A', objective: 'A', status: 'validation', dependencies: [] }],
+    })
+    const appendExecution = () => appendProjectEvent(context, {
+      type: 'mission.execution.finished', missionId: 'mission-0001',
+      data: { outcome: 'SUCCESS', fromStatus: 'pending', toStatus: 'validation', sessionId: 'execution', result: 'ok' },
+    })
+    if (!stale) appendExecution()
+    const review = appendProjectEvent(context, {
+      type: 'mission.review.finished', missionId: 'mission-0001',
+      data: {
+        sessionId: 'review', verdict,
+        summary: verdict === 'PASS' ? 'ok' : 'problema',
+        findings: verdict === 'PASS' ? [] : [{ severity: 'HIGH', title: 'Falha', detail: 'Detalhe', paths: [] }],
+      },
+    })
+    if (stale) appendExecution()
+
+    const result = runCli([
+      'request-review-correction', '--project-root', root,
+      '--mission', 'mission-0001', '--review-event', review.id,
+    ])
+    assert.equal(result.status, 1)
+    assert.equal(result.stdout, '')
+    assert.equal(result.stderr.trim(), message)
+    assert.equal(readProjectStateStore(context).missions[0].status, 'validation')
+  })
+}
+
 for (const [name, argumentsList, message] of [
   ['comando ausente', [], 'comando é obrigatório'],
   ['projectRoot ausente', ['list-ready'], '--project-root é obrigatório'],

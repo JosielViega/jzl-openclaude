@@ -39,18 +39,18 @@ function createProjectRootRedactor(context) {
   return (text) => text.replace(pattern, '<projectRoot>')
 }
 
-function truncateDiagnosticText(text) {
-  if (text.length <= MAX_DIAGNOSTIC_TEXT_LENGTH) {
+function truncateText(text, maximumLength) {
+  if (text.length <= maximumLength) {
     return text
   }
 
   const suffix = `\n${TRUNCATION_MARKER}`
 
-  return `${text.slice(0, MAX_DIAGNOSTIC_TEXT_LENGTH - suffix.length)}${suffix}`
+  return `${text.slice(0, maximumLength - suffix.length)}${suffix}`
 }
 
 function sanitizeDiagnosticText(text, redactProjectRoot) {
-  return truncateDiagnosticText(redactProjectRoot(text))
+  return truncateText(redactProjectRoot(text), MAX_DIAGNOSTIC_TEXT_LENGTH)
 }
 
 function cloneFailedValidator(result, redactProjectRoot) {
@@ -92,11 +92,7 @@ function validateStandards(standards) {
   }
 }
 
-function buildHandoff(context, handoff) {
-  if (handoff === null) {
-    return null
-  }
-
+function buildValidationHandoff(context, handoff) {
   const selectedValidators = handoff.payload.failedValidators
     .slice(0, MAX_CORRECTION_VALIDATORS)
   const redactProjectRoot = createProjectRootRedactor(context)
@@ -119,6 +115,47 @@ function buildHandoff(context, handoff) {
       omittedCount: handoff.payload.failedValidators.length - selectedValidators.length,
     },
   }
+}
+
+function buildReviewHandoff(context, handoff) {
+  const redactProjectRoot = createProjectRootRedactor(context)
+  const sanitize = (text, maximumLength) => truncateText(
+    redactProjectRoot(text),
+    maximumLength,
+  )
+
+  return {
+    schemaVersion: handoff.schemaVersion,
+    type: handoff.type,
+    missionId: handoff.missionId,
+    source: {
+      responsibility: handoff.source.responsibility,
+      eventId: handoff.source.eventId,
+    },
+    authorization: { eventId: handoff.authorization.eventId },
+    target: { responsibility: handoff.target.responsibility },
+    payload: {
+      summary: sanitize(handoff.payload.summary, 4000),
+      findings: handoff.payload.findings.slice(0, 20).map((finding) => ({
+        severity: finding.severity,
+        title: sanitize(finding.title, 200),
+        detail: sanitize(finding.detail, 4000),
+        paths: finding.paths.slice(0, 20).map(
+          (path) => sanitize(path, 500),
+        ),
+      })),
+    },
+  }
+}
+
+function buildHandoff(context, handoff) {
+  if (handoff === null) {
+    return null
+  }
+
+  return handoff.type === 'mission-review-correction'
+    ? buildReviewHandoff(context, handoff)
+    : buildValidationHandoff(context, handoff)
 }
 
 export function buildMissionExecutionContext(context, input) {

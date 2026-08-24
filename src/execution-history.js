@@ -82,6 +82,18 @@ export function recordMissionReviewUnavailable(context, input) {
   })
 }
 
+export function recordMissionReviewCorrectionRequested(context, input) {
+  return appendProjectEvent(context, {
+    type: 'mission.review.correction.requested',
+    missionId: input.missionId,
+    data: {
+      reviewEventId: input.reviewEventId,
+      fromStatus: 'validation',
+      toStatus: 'correction',
+    },
+  })
+}
+
 export function listProjectHistory(context, missionId) {
   if (
     missionId !== undefined

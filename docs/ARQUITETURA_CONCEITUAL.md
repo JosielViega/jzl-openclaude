@@ -58,6 +58,10 @@ Executa verificações determinísticas de estado, escopo, dependências, crité
 
 Valida e processa Handoffs estruturados entre responsabilidades. Transfere resultados e informações resumíveis sem depender do compartilhamento automático de transcripts.
 
+### Mission Review
+
+A Mission Review é consultiva e não possui autoridade sobre o workflow. Um resultado `CONCERNS` só pode originar uma transição para correção após autorização explícita do Host/JZL; a execução seguinte recebe um Handoff estruturado, sem compartilhamento de transcript.
+
 ### Execution History / Event Log
 
 Registra eventos e resultados relevantes da execução para auditoria, diagnóstico e rastreabilidade. O histórico explica o que ocorreu, mas não substitui o estado autoritativo do State Store.

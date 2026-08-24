@@ -165,6 +165,29 @@ test('valida review unavailable e preserva campos aditivos', () => {
   assert.equal(value.data.extra, true)
 })
 
+test('aceita pedido de correção por revisão e campos aditivos', () => {
+  const value = event('mission.review.correction.requested', {
+    reviewEventId: 'event-000123', fromStatus: 'validation',
+    toStatus: 'correction', extra: true,
+  })
+  assert.strictEqual(validateProjectEvent(value), value)
+})
+
+test('valida referência e mapping do pedido de correção por revisão', () => {
+  assert.throws(() => validateProjectEvent(event(
+    'mission.review.correction.requested',
+    { reviewEventId: 'event-1', fromStatus: 'validation', toStatus: 'correction' },
+  )), { message: 'reviewEventId do pedido de correção por revisão é inválido' })
+  for (const data of [
+    { reviewEventId: 'event-000123', fromStatus: 'running', toStatus: 'correction' },
+    { reviewEventId: 'event-000123', fromStatus: 'validation', toStatus: 'running' },
+  ]) {
+    assert.throws(() => validateProjectEvent(event(
+      'mission.review.correction.requested', data,
+    )), { message: 'mapeamento do pedido de correção por revisão é incoerente' })
+  }
+})
+
 for (const [name, value, message] of [
   ['container null', null, 'evento deve ser um objeto'],
   ['id ausente', { ...executionSuccess(), id: undefined }, 'id do evento é obrigatório'],

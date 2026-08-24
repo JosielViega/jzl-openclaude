@@ -9,6 +9,7 @@ import {
   recordMissionExecutionError,
   recordMissionExecutionSuccess,
   recordMissionReviewFinished,
+  recordMissionReviewCorrectionRequested,
   recordMissionReviewUnavailable,
   recordMissionValidationFinished,
   recordMissionValidationUnavailable,
@@ -177,4 +178,15 @@ test('registra review unavailable com ou sem sessionId sem persistir Error', (t)
   })
   assert.equal(JSON.stringify(unidentified).includes('stack'), false)
   assert.equal(JSON.stringify(unidentified).includes('segredo'), false)
+})
+
+test('registra autorização de correção por revisão sem alterar State', (t) => {
+  const context = createContext(t)
+  const event = recordMissionReviewCorrectionRequested(context, {
+    missionId: 'mission-0001', reviewEventId: 'event-000123',
+  })
+  assert.equal(event.type, 'mission.review.correction.requested')
+  assert.deepEqual(event.data, {
+    reviewEventId: 'event-000123', fromStatus: 'validation', toStatus: 'correction',
+  })
 })

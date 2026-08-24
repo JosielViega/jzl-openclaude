@@ -7,6 +7,7 @@ import {
 } from './mission-engine.js'
 import { executeProjectMission } from './mission-execution.js'
 import { reviewProjectMission } from './mission-review.js'
+import { requestMissionReviewCorrection } from './mission-review-correction.js'
 import { validateConfiguredProjectMission } from './mission-validation.js'
 import { createProjectContext } from './project-context.js'
 import { validateProjectRoot } from './project-root.js'
@@ -96,6 +97,18 @@ try {
     printJson(await reviewProjectMission(
       createContext(options),
       options['--mission'],
+    ))
+  } else if (command === 'request-review-correction') {
+    const options = parseCliOptions(argumentsList, {
+      ...projectRootOption,
+      '--mission': { required: true },
+      '--review-event': { required: true },
+    })
+
+    printJson(requestMissionReviewCorrection(
+      createContext(options),
+      options['--mission'],
+      options['--review-event'],
     ))
   } else if (command === 'run-mission') {
     const options = parseCliOptions(argumentsList, {

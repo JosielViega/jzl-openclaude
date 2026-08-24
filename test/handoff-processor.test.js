@@ -49,6 +49,30 @@ function appendValidation(context, {
   })
 }
 
+function appendExecution(context) {
+  return appendProjectEvent(context, {
+    type: 'mission.execution.finished', missionId: 'mission-0001',
+    data: { outcome: 'SUCCESS', fromStatus: 'pending', toStatus: 'validation', sessionId: 'execution', result: 'ok' },
+  })
+}
+
+function appendReview(context, verdict = 'CONCERNS') {
+  return appendProjectEvent(context, {
+    type: 'mission.review.finished', missionId: 'mission-0001',
+    data: {
+      sessionId: 'review', verdict, summary: verdict === 'PASS' ? 'ok' : 'problema',
+      findings: verdict === 'PASS' ? [] : [{ severity: 'HIGH', title: 'Falha', detail: 'Detalhe', paths: ['index.php'] }],
+    },
+  })
+}
+
+function appendAuthorization(context, reviewEventId) {
+  return appendProjectEvent(context, {
+    type: 'mission.review.correction.requested', missionId: 'mission-0001',
+    data: { reviewEventId, fromStatus: 'validation', toStatus: 'correction' },
+  })
+}
+
 test('resolve o último FAIL compatível como Handoff canônico', (t) => {
   const context = createContext(t)
   appendValidation(context, { results: [result('antigo')] })
@@ -168,4 +192,48 @@ test('não altera bytes do projeto durante a resolução', (t) => {
   resolveMissionCorrectionHandoff(context, 'mission-0001')
 
   assert.deepEqual(readFileSync(protectedPath), before)
+})
+
+test('resolve Handoff causal de review autorizado sem sessionId', (t) => {
+  const context = createContext(t)
+  appendExecution(context)
+  const review = appendReview(context)
+  const authorization = appendAuthorization(context, review.id)
+  const handoff = resolveMissionCorrectionHandoff(context, 'mission-0001')
+
+  assert.deepEqual(handoff, {
+    schemaVersion: 1,
+    type: 'mission-review-correction',
+    missionId: 'mission-0001',
+    source: { responsibility: 'mission-review', eventId: review.id },
+    authorization: { eventId: authorization.id },
+    target: { responsibility: 'mission-execution' },
+    payload: {
+      summary: 'problema',
+      findings: [{ severity: 'HIGH', title: 'Falha', detail: 'Detalhe', paths: ['index.php'] }],
+    },
+  })
+  assert.equal(JSON.stringify(handoff).includes('sessionId'), false)
+})
+
+test('review sem autorização bloqueia fallback para FAIL antigo', (t) => {
+  const context = createContext(t)
+  appendValidation(context)
+  appendExecution(context)
+  appendReview(context)
+  assert.throws(() => resolveMissionCorrectionHandoff(context, 'mission-0001'), {
+    message: 'handoff de correção da Mission não está disponível',
+  })
+})
+
+test('authorization incoerente falha fechado sem fallback antigo', (t) => {
+  const context = createContext(t)
+  appendValidation(context)
+  appendExecution(context)
+  const old = appendReview(context)
+  appendReview(context)
+  appendAuthorization(context, old.id)
+  assert.throws(() => resolveMissionCorrectionHandoff(context, 'mission-0001'), {
+    message: 'handoff de correção da Mission não está disponível',
+  })
 })

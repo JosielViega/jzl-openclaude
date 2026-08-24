@@ -60,6 +60,27 @@ function handoff(overrides = {}) {
   }
 }
 
+function reviewHandoff(context, overrides = {}) {
+  return {
+    schemaVersion: 1,
+    type: 'mission-review-correction',
+    missionId: 'mission-0001',
+    source: { responsibility: 'mission-review', eventId: 'event-000123' },
+    authorization: { eventId: 'event-000124' },
+    target: { responsibility: 'mission-execution' },
+    payload: {
+      summary: `Problema em ${context.projectRoot}\\index.php`,
+      findings: [{
+        severity: 'HIGH',
+        title: `Falha em ${context.projectRoot}`,
+        detail: `Detalhe ${context.projectRoot.replaceAll('\\', '/')}/index.php`,
+        paths: [`${context.projectRoot}\\index.php`],
+      }],
+    },
+    ...overrides,
+  }
+}
+
 test('constrói contexto mínimo sem Handoff', (t) => {
   const context = createContext(t)
   const built = buildMissionExecutionContext(context, {
@@ -226,4 +247,40 @@ test('preserva validações existentes de Mission e standards', (t) => {
   assert.throws(() => buildMissionExecutionContext(context, {
     mission: mission(), standards: null, handoff: null,
   }), { message: 'standards deve ser um objeto' })
+})
+
+test('constrói Review Handoff redigido com envelope conhecido e sem mutação', (t) => {
+  const context = createContext(t)
+  const raw = reviewHandoff(context)
+  const snapshot = structuredClone(raw)
+  const built = buildMissionExecutionContext(context, {
+    mission: mission(), standards: standards(), handoff: raw,
+  })
+
+  assert.deepEqual(Object.keys(built.handoff), [
+    'schemaVersion', 'type', 'missionId', 'source', 'authorization', 'target', 'payload',
+  ])
+  assert.equal(built.handoff.type, 'mission-review-correction')
+  assert.deepEqual(built.handoff.source, raw.source)
+  assert.deepEqual(built.handoff.authorization, raw.authorization)
+  assert.deepEqual(built.handoff.target, raw.target)
+  assert.equal(JSON.stringify(built.handoff.payload).includes(context.projectRoot), false)
+  assert.equal(JSON.stringify(built.handoff.payload).includes(context.projectRoot.replaceAll('\\', '/')), false)
+  assert.match(built.handoff.payload.summary, /<projectRoot>/)
+  assert.match(built.handoff.payload.findings[0].title, /<projectRoot>/)
+  assert.match(built.handoff.payload.findings[0].detail, /<projectRoot>/)
+  assert.match(built.handoff.payload.findings[0].paths[0], /<projectRoot>/)
+  assert.deepEqual(raw, snapshot)
+})
+
+test('Review Handoff contextual não compartilha findings nem propaga campos extras', (t) => {
+  const context = createContext(t)
+  const raw = reviewHandoff(context, { extra: true })
+  const built = buildMissionExecutionContext(context, {
+    mission: mission(), standards: standards(), handoff: raw,
+  })
+  built.handoff.payload.findings[0].detail = 'mutado'
+  assert.notEqual(raw.payload.findings[0].detail, 'mutado')
+  assert.equal(Object.hasOwn(built.handoff, 'extra'), false)
+  assert.equal(Object.hasOwn(built.handoff.payload, 'omittedCount'), false)
 })

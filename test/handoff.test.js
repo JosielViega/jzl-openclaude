@@ -33,11 +33,49 @@ function validHandoff(overrides = {}) {
   }
 }
 
+function validReviewHandoff(overrides = {}) {
+  return {
+    schemaVersion: 1,
+    type: 'mission-review-correction',
+    missionId: 'mission-0001',
+    source: { responsibility: 'mission-review', eventId: 'event-000123' },
+    authorization: { eventId: 'event-000124' },
+    target: { responsibility: 'mission-execution' },
+    payload: {
+      summary: 'Há problema',
+      findings: [{ severity: 'HIGH', title: 'Falha', detail: 'Detalhe', paths: ['index.php'] }],
+    },
+    ...overrides,
+  }
+}
+
 test('valida Handoff canônico e retorna a mesma referência', () => {
   const handoff = validHandoff()
 
   assert.strictEqual(validateHandoff(handoff), handoff)
 })
+
+test('valida Handoff de review correction sem mutar payload', () => {
+  const handoff = validReviewHandoff()
+  const before = structuredClone(handoff)
+  assert.strictEqual(validateHandoff(handoff), handoff)
+  assert.deepEqual(handoff, before)
+  assert.equal(Object.hasOwn(handoff, 'sessionId'), false)
+})
+
+for (const [name, override, message] of [
+  ['source', { source: { responsibility: 'mission-validation', eventId: 'event-000123' } }, 'responsabilidade de origem do handoff não é suportada'],
+  ['authorization ausente', { authorization: undefined }, 'authorization do handoff deve ser um objeto'],
+  ['authorization inválida', { authorization: [] }, 'authorization do handoff deve ser um objeto'],
+  ['authorization eventId', { authorization: { eventId: 'event-1' } }, 'eventId de autorização do handoff é inválido'],
+  ['referências iguais', { authorization: { eventId: 'event-000123' } }, 'eventos de origem e autorização do handoff devem ser diferentes'],
+  ['summary', { payload: { summary: '', findings: [{ severity: 'HIGH', title: 'x', detail: 'x', paths: [] }] } }, 'summary da revisão é inválido'],
+  ['findings vazio', { payload: { summary: 'x', findings: [] } }, 'mapeamento do resultado da revisão é incoerente'],
+]) {
+  test(`rejeita review correction com ${name}`, () => {
+    assert.throws(() => validateHandoff(validReviewHandoff(override)), { message })
+  })
+}
 
 const invalidCases = [
   ['container null', null, 'handoff deve ser um objeto'],

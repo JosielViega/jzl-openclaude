@@ -1,3 +1,5 @@
+import { validateMissionReviewResult } from './mission-review-result.js'
+
 const missionIdPattern = /^mission-\d{4,}$/
 const eventIdPattern = /^event-\d{6,}$/
 
@@ -59,7 +61,7 @@ export function validateHandoff(handoff) {
     throw new Error('type do handoff deve ser uma string')
   }
 
-  if (handoff.type !== 'mission-correction') {
+  if (!['mission-correction', 'mission-review-correction'].includes(handoff.type)) {
     throw new Error('type do handoff não é suportado')
   }
 
@@ -82,7 +84,11 @@ export function validateHandoff(handoff) {
     throw new Error('source do handoff deve ser um objeto')
   }
 
-  if (handoff.source.responsibility !== 'mission-validation') {
+  const expectedSourceResponsibility = handoff.type === 'mission-correction'
+    ? 'mission-validation'
+    : 'mission-review'
+
+  if (handoff.source.responsibility !== expectedSourceResponsibility) {
     throw new Error('responsabilidade de origem do handoff não é suportada')
   }
 
@@ -95,6 +101,23 @@ export function validateHandoff(handoff) {
     || !eventIdPattern.test(handoff.source.eventId)
   ) {
     throw new Error('eventId de origem do handoff é inválido')
+  }
+
+  if (handoff.type === 'mission-review-correction') {
+    if (!isObject(handoff.authorization)) {
+      throw new Error('authorization do handoff deve ser um objeto')
+    }
+
+    if (
+      typeof handoff.authorization.eventId !== 'string'
+      || !eventIdPattern.test(handoff.authorization.eventId)
+    ) {
+      throw new Error('eventId de autorização do handoff é inválido')
+    }
+
+    if (handoff.authorization.eventId === handoff.source.eventId) {
+      throw new Error('eventos de origem e autorização do handoff devem ser diferentes')
+    }
   }
 
   if (handoff.target === undefined) {
@@ -117,10 +140,18 @@ export function validateHandoff(handoff) {
     throw new Error('payload do handoff deve ser um objeto')
   }
 
-  if (
-    !Array.isArray(handoff.payload.failedValidators)
-    || handoff.payload.failedValidators.length === 0
-  ) {
+  if (handoff.type === 'mission-review-correction') {
+    validateMissionReviewResult({
+      verdict: 'CONCERNS',
+      summary: handoff.payload.summary,
+      findings: handoff.payload.findings,
+    })
+
+    return handoff
+  }
+
+  if (!Array.isArray(handoff.payload.failedValidators)
+    || handoff.payload.failedValidators.length === 0) {
     throw new Error('failedValidators do handoff deve ser um array não vazio')
   }
 
