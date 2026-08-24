@@ -181,6 +181,53 @@ test('list-ready retorna somente Missions prontas sem persistir ready', (t) => {
   assert.equal(readFileSync(join(root, '.jzl', 'state.json'), 'utf8').includes('ready'), false)
 })
 
+test('set-model persiste rotas explícitas por responsabilidade', (t) => {
+  const root = createRoot(t)
+  initProject(root)
+
+  const execution = runJsonCli([
+    'set-model', '--project-root', root,
+    '--responsibility', 'mission-execution', '--model', '  model-a  ',
+  ]).output
+  const review = runJsonCli([
+    'set-model', '--project-root', root,
+    '--responsibility', 'mission-review', '--model', 'model-b',
+  ]).output
+
+  assert.deepEqual(execution, {
+    responsibility: 'mission-execution', model: 'model-a',
+  })
+  assert.deepEqual(review, {
+    responsibility: 'mission-review', model: 'model-b',
+  })
+  assert.deepEqual(
+    JSON.parse(readFileSync(join(root, '.jzl', 'config.json'), 'utf8')).models,
+    { 'mission-execution': 'model-a', 'mission-review': 'model-b' },
+  )
+})
+
+test('set-model exige flags singulares e responsabilidade suportada', (t) => {
+  const root = createRoot(t)
+  initProject(root)
+
+  for (const [argumentsList, message] of [
+    [['set-model', '--project-root', root, '--model', 'x'], '--responsibility é obrigatório'],
+    [['set-model', '--project-root', root, '--responsibility', 'mission-review'], '--model é obrigatório'],
+    [[
+      'set-model', '--project-root', root, '--responsibility', 'other', '--model', 'x',
+    ], 'responsabilidade de modelo não é suportada'],
+    [[
+      'set-model', '--project-root', root, '--responsibility', 'mission-review',
+      '--model', 'x', '--model', 'y',
+    ], 'opção duplicada: --model'],
+  ]) {
+    const result = runCli(argumentsList)
+    assert.equal(result.status, 1)
+    assert.equal(result.stdout, '')
+    assert.equal(result.stderr.trim(), message)
+  }
+})
+
 for (const mode of ['PASS', 'FAIL', 'ERROR']) {
   test(`validate-mission retorna outcome ${mode} com exit code zero`, (t) => {
     const root = createValidationProject(t, mode)

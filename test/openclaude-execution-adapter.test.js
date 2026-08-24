@@ -45,6 +45,7 @@ const invalidInputCases = [
         mode: 'fresh',
         missionId: 'mission-0001',
       },
+      modelRoute: { responsibility: 'mission-execution', model: 'model-a' },
     },
     expectedError: 'projectRoot deve ser um caminho absoluto',
   },
@@ -69,6 +70,7 @@ test('rejeita descriptor de sessão antes de criar worker', async () => {
         mode: 'resume',
         missionId: 'mission-0001',
       },
+      modelRoute: { responsibility: 'mission-execution', model: 'model-a' },
     }),
     { message: 'modo da sessão de Mission não é suportado' },
   )
@@ -81,5 +83,31 @@ test('aceita descriptor mission-review e valida projectRoot antes do worker', as
     session: {
       responsibility: 'mission-review', mode: 'fresh', missionId: 'mission-0001',
     },
+    modelRoute: { responsibility: 'mission-review', model: 'model-review' },
   }), { message: 'projectRoot deve ser um caminho absoluto' })
+})
+
+test('valida rota de modelo e vínculo com responsabilidade antes do worker', async () => {
+  const session = {
+    responsibility: 'mission-execution', mode: 'fresh', missionId: 'mission-0001',
+  }
+  await assert.rejects(executeOpenClaudeText({
+    projectRoot: 'relative/path', prompt: 'teste', session,
+    modelRoute: { responsibility: 'mission-review', model: 'review-model' },
+  }), { message: 'rota de modelo não corresponde à responsabilidade da sessão' })
+  await assert.rejects(executeOpenClaudeText({
+    projectRoot: 'relative/path', prompt: 'teste',
+    session: { ...session, responsibility: 'mission-review' },
+    modelRoute: { responsibility: 'mission-execution', model: 'execution-model' },
+  }), { message: 'rota de modelo não corresponde à responsabilidade da sessão' })
+  await assert.rejects(executeOpenClaudeText({
+    projectRoot: 'relative/path', prompt: 'teste', session, modelRoute: null,
+  }), { message: 'rota de modelo deve ser um objeto' })
+  await assert.rejects(executeOpenClaudeText({
+    projectRoot: 'relative/path', prompt: 'teste', session,
+    modelRoute: { responsibility: 'mission-execution', model: '  model  ' },
+  }), { message: 'modelo da rota deve ser uma string não vazia' })
+  await assert.rejects(executeOpenClaudeText({
+    projectRoot: 'relative/path', prompt: 'teste', session, model: 'model-solto',
+  }), { message: 'rota de modelo deve ser um objeto' })
 })

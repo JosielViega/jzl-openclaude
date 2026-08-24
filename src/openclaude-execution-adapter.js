@@ -11,13 +11,14 @@ import {
 import { waitForOpenClaudeWorkerClose } from './openclaude-worker-watchdog.js'
 import { validateProjectRoot } from './project-root.js'
 import { validateMissionSession } from './session-manager.js'
+import { validateProjectModelRoute } from './model-router.js'
 
 export async function executeOpenClaudeText(input) {
   if (input === null || typeof input !== 'object' || Array.isArray(input)) {
     throw new Error('entrada deve ser um objeto')
   }
 
-  const { projectRoot, prompt, session } = input
+  const { projectRoot, prompt, session, modelRoute } = input
 
   if (typeof prompt !== 'string') {
     throw new Error('prompt deve ser uma string')
@@ -30,6 +31,12 @@ export async function executeOpenClaudeText(input) {
   }
 
   validateMissionSession(session)
+  validateProjectModelRoute(modelRoute)
+
+  if (modelRoute.responsibility !== session.responsibility) {
+    throw new Error('rota de modelo não corresponde à responsabilidade da sessão')
+  }
+
   const validatedProjectRoot = validateProjectRoot(projectRoot)
   const guardrails = resolveOpenClaudeExecutionGuardrails(
     session.responsibility,
@@ -62,6 +69,7 @@ export async function executeOpenClaudeText(input) {
     prompt: validatedPrompt,
     sessionMode: session.mode,
     responsibility: session.responsibility,
+    model: modelRoute.model,
   }))
 
   const { code, signal, timedOut } = await workerClose
@@ -74,10 +82,15 @@ export async function executeOpenClaudeText(input) {
     )
   }
 
-  return normalizeOpenClaudeWorkerResult({
+  const execution = normalizeOpenClaudeWorkerResult({
     code,
     signal,
     stdout,
     stderr,
   })
+
+  return {
+    ...execution,
+    model: modelRoute.model,
+  }
 }

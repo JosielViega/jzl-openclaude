@@ -5,6 +5,7 @@ export function createOpenClaudeQueryOptions(
   projectRoot,
   responsibility,
   abortController,
+  model,
 ) {
   const validatedProjectRoot = validateProjectRoot(projectRoot)
 
@@ -12,9 +13,14 @@ export function createOpenClaudeQueryOptions(
     throw new Error('abortController OpenClaude é inválido')
   }
 
+  if (typeof model !== 'string' || model.trim() === '') {
+    throw new Error('model OpenClaude deve ser uma string não vazia')
+  }
+
   return {
     cwd: validatedProjectRoot,
     canUseTool: createOpenClaudeToolPolicy(validatedProjectRoot, responsibility),
     abortController,
+    model: model.trim(),
   }
 }

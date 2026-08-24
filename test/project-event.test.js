@@ -75,6 +75,24 @@ test('aceita execution ERROR legacy e sessionId string ou null', () => {
   assert.strictEqual(validateProjectEvent(unidentified), unidentified)
 })
 
+test('audita model opcional em eventos de execução sem quebrar legacy', () => {
+  for (const value of [
+    executionSuccess(),
+    executionSuccess({ model: 'model-a' }),
+    executionError(),
+    executionError({ model: null }),
+    executionError({ model: 'model-a' }),
+  ]) assert.strictEqual(validateProjectEvent(value), value)
+
+  for (const value of [
+    executionSuccess({ model: '' }),
+    executionError({ model: '' }),
+    executionError({ model: 1 }),
+  ]) assert.throws(() => validateProjectEvent(value), {
+    message: 'model do evento de execução é inválido',
+  })
+})
+
 test('rejeita sessionId inválido em execution ERROR', () => {
   for (const sessionId of [123, '']) {
     assert.throws(
@@ -149,6 +167,28 @@ test('aceita review unavailable com sessionId null ou identificado', () => {
     })
     assert.strictEqual(validateProjectEvent(value), value)
   }
+})
+
+test('audita model opcional em eventos de revisão sem quebrar legacy', () => {
+  const finishedBase = {
+    sessionId: 'session-review', verdict: 'PASS', summary: 'ok', findings: [],
+  }
+  for (const data of [finishedBase, { ...finishedBase, model: 'review-model' }]) {
+    const value = event('mission.review.finished', data)
+    assert.strictEqual(validateProjectEvent(value), value)
+  }
+  for (const model of [null, 'review-model']) {
+    const value = event('mission.review.unavailable', {
+      sessionId: null, model, errorMessage: 'indisponível',
+    })
+    assert.strictEqual(validateProjectEvent(value), value)
+  }
+  assert.throws(() => validateProjectEvent(event('mission.review.finished', {
+    ...finishedBase, model: '',
+  })), { message: 'model do evento de revisão é inválido' })
+  assert.throws(() => validateProjectEvent(event('mission.review.unavailable', {
+    sessionId: null, model: '', errorMessage: 'indisponível',
+  })), { message: 'model do evento de revisão é inválido' })
 })
 
 test('valida review unavailable e preserva campos aditivos', () => {

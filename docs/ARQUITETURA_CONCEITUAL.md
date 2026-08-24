@@ -40,7 +40,7 @@ Cria e acompanha sessões isoladas por responsabilidade. Mantém seus limites e 
 
 ### Model Router
 
-Seleciona o modelo adequado conforme a complexidade e as regras aplicáveis. Qwen3.5-9B será inicialmente o modelo principal, sem impedir o uso de outros modelos quando necessário.
+O JZL seleciona explicitamente um modelo por responsabilidade a partir do Project Config e registra essa escolha no Event Log. O OpenClaude continua responsável pelo provider e por sua mecânica de execução. No v1 não há seleção automática nem fallback, e cada Session permanece fresh e independente do modelo escolhido.
 
 ### OpenClaude Execution Adapter
 

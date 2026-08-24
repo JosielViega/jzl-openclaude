@@ -24,16 +24,17 @@ after(() => {
 })
 
 test('usa o projectRoot validado e normalizado como cwd', () => {
-  const options = createOpenClaudeQueryOptions(temporaryDirectory, 'mission-execution', abortController)
+  const options = createOpenClaudeQueryOptions(temporaryDirectory, 'mission-execution', abortController, 'model-a')
 
   assert.equal(options.cwd, normalize(temporaryDirectory))
 })
 
 test('retorna somente as opções mínimas autorizadas', () => {
-  const options = createOpenClaudeQueryOptions(temporaryDirectory, 'mission-execution', abortController)
+  const options = createOpenClaudeQueryOptions(temporaryDirectory, 'mission-execution', abortController, 'model-a')
 
-  assert.deepEqual(Object.keys(options).sort(), ['abortController', 'canUseTool', 'cwd'])
+  assert.deepEqual(Object.keys(options).sort(), ['abortController', 'canUseTool', 'cwd', 'model'])
   assert.strictEqual(options.abortController, abortController)
+  assert.equal(options.model, 'model-a')
   assert.equal(options.sessionId, undefined)
   assert.equal(options.resume, undefined)
   assert.equal(options.continue, undefined)
@@ -42,13 +43,13 @@ test('retorna somente as opções mínimas autorizadas', () => {
 })
 
 test('expõe canUseTool como função', () => {
-  const options = createOpenClaudeQueryOptions(temporaryDirectory, 'mission-execution', abortController)
+  const options = createOpenClaudeQueryOptions(temporaryDirectory, 'mission-execution', abortController, 'model-a')
 
   assert.equal(typeof options.canUseTool, 'function')
 })
 
 test('autoriza Read interno válido', async () => {
-  const options = createOpenClaudeQueryOptions(temporaryDirectory, 'mission-execution', abortController)
+  const options = createOpenClaudeQueryOptions(temporaryDirectory, 'mission-execution', abortController, 'model-a')
   const result = await options.canUseTool('Read', {
     file_path: join(temporaryDirectory, 'inside.txt'),
   })
@@ -57,7 +58,7 @@ test('autoriza Read interno válido', async () => {
 })
 
 test('autoriza Write interno válido', async () => {
-  const options = createOpenClaudeQueryOptions(temporaryDirectory, 'mission-execution', abortController)
+  const options = createOpenClaudeQueryOptions(temporaryDirectory, 'mission-execution', abortController, 'model-a')
   const result = await options.canUseTool('Write', {
     file_path: join(temporaryDirectory, 'new.txt'),
     content: 'example',
@@ -67,7 +68,7 @@ test('autoriza Write interno válido', async () => {
 })
 
 test('nega Read e Write externos', async () => {
-  const options = createOpenClaudeQueryOptions(temporaryDirectory, 'mission-execution', abortController)
+  const options = createOpenClaudeQueryOptions(temporaryDirectory, 'mission-execution', abortController, 'model-a')
   const externalPath = join(externalDirectory, 'outside.txt')
 
   assert.equal(
@@ -84,7 +85,7 @@ test('nega Read e Write externos', async () => {
 })
 
 test('nega Bash', async () => {
-  const options = createOpenClaudeQueryOptions(temporaryDirectory, 'mission-execution', abortController)
+  const options = createOpenClaudeQueryOptions(temporaryDirectory, 'mission-execution', abortController, 'model-a')
   const result = await options.canUseTool('Bash', { command: 'echo no' })
 
   assert.equal(result.behavior, 'deny')
@@ -93,15 +94,15 @@ test('nega Bash', async () => {
 
 test('rejeita projectRoot relativo', () => {
   assert.throws(
-    () => createOpenClaudeQueryOptions('relative/path', 'mission-execution', abortController),
+    () => createOpenClaudeQueryOptions('relative/path', 'mission-execution', abortController, 'model-a'),
     /caminho absoluto/,
   )
 })
 
 test('review mantém QueryOptions mínimas e nega Write', async () => {
-  const options = createOpenClaudeQueryOptions(temporaryDirectory, 'mission-review', abortController)
+  const options = createOpenClaudeQueryOptions(temporaryDirectory, 'mission-review', abortController, 'model-review')
 
-  assert.deepEqual(Object.keys(options).sort(), ['abortController', 'canUseTool', 'cwd'])
+  assert.deepEqual(Object.keys(options).sort(), ['abortController', 'canUseTool', 'cwd', 'model'])
   for (const key of ['sessionId', 'resume', 'continue', 'fork', 'forkSession']) {
     assert.equal(options[key], undefined)
   }
@@ -113,8 +114,19 @@ test('review mantém QueryOptions mínimas e nega Write', async () => {
 test('rejeita AbortController ausente ou inválido', () => {
   for (const value of [undefined, null, {}, new AbortController().signal]) {
     assert.throws(
-      () => createOpenClaudeQueryOptions(temporaryDirectory, 'mission-execution', value),
+      () => createOpenClaudeQueryOptions(temporaryDirectory, 'mission-execution', value, 'model-a'),
       { message: 'abortController OpenClaude é inválido' },
+    )
+  }
+})
+
+test('rejeita model ausente, vazio ou não string', () => {
+  for (const model of [undefined, null, 1, '   ']) {
+    assert.throws(
+      () => createOpenClaudeQueryOptions(
+        temporaryDirectory, 'mission-execution', abortController, model,
+      ),
+      { message: 'model OpenClaude deve ser uma string não vazia' },
     )
   }
 })

@@ -9,6 +9,7 @@ import { parseMissionReviewResult } from './mission-review-result.js'
 import { executeOpenClaudeText } from './openclaude-execution-adapter.js'
 import { createMissionReviewSession } from './session-manager.js'
 import { resolveProjectStandards } from './standards-resolver.js'
+import { resolveProjectModelRoute } from './model-router.js'
 
 function validSessionId(value) {
   return typeof value === 'string' && value.trim() !== '' ? value : null
@@ -31,8 +32,10 @@ export async function reviewProjectMission(context, missionId) {
 
   let execution
   let review
+  let modelRoute = null
 
   try {
+    modelRoute = resolveProjectModelRoute(context, 'mission-review')
     const standards = resolveProjectStandards(context)
     const reviewContext = buildMissionReviewContext(context, {
       mission,
@@ -45,10 +48,12 @@ export async function reviewProjectMission(context, missionId) {
       projectRoot: context.projectRoot,
       prompt,
       session,
+      modelRoute,
     })
 
     review = {
       sessionId: execution.sessionId,
+      model: execution.model,
       ...parseMissionReviewResult(execution.result),
     }
   } catch (error) {
@@ -56,6 +61,7 @@ export async function reviewProjectMission(context, missionId) {
       recordMissionReviewUnavailable(context, {
         missionId,
         sessionId: unavailableSessionId(execution, error),
+        model: modelRoute?.model ?? null,
         error,
       })
     } catch (historyError) {

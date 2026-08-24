@@ -9,6 +9,7 @@ test('normaliza uma solicitação válida', () => {
       prompt: '  JZL_TEST  ',
       sessionMode: 'fresh',
       responsibility: 'mission-execution',
+      model: '  model/a:b  ',
     }),
   )
 
@@ -16,6 +17,7 @@ test('normaliza uma solicitação válida', () => {
     prompt: 'JZL_TEST',
     sessionMode: 'fresh',
     responsibility: 'mission-execution',
+    model: 'model/a:b',
   })
 })
 
@@ -88,9 +90,9 @@ for (const [name, request, expectedError] of [
 
 test('aceita responsibility mission-review', () => {
   assert.deepEqual(parseOpenClaudeWorkerRequest(JSON.stringify({
-    prompt: 'revisar', sessionMode: 'fresh', responsibility: 'mission-review',
+    prompt: 'revisar', sessionMode: 'fresh', responsibility: 'mission-review', model: 'review-model',
   })), {
-    prompt: 'revisar', sessionMode: 'fresh', responsibility: 'mission-review',
+    prompt: 'revisar', sessionMode: 'fresh', responsibility: 'mission-review', model: 'review-model',
   })
 })
 
@@ -100,11 +102,27 @@ for (const [name, responsibility, message] of [
   ['desconhecida', 'other', 'responsibility do worker não é suportada'],
 ]) {
   test(`rejeita responsibility ${name}`, () => {
-    const request = { prompt: 'teste', sessionMode: 'fresh' }
+    const request = { prompt: 'teste', sessionMode: 'fresh', model: 'model-a' }
     if (responsibility !== undefined) request.responsibility = responsibility
     assert.throws(
       () => parseOpenClaudeWorkerRequest(JSON.stringify(request)),
       { message },
     )
+  })
+}
+
+for (const [name, model, message] of [
+  ['ausente', undefined, 'model é obrigatório'],
+  ['não string', 1, 'model deve ser uma string'],
+  ['vazio', '   ', 'model não pode ser vazio'],
+]) {
+  test(`rejeita model ${name}`, () => {
+    const request = {
+      prompt: 'teste', sessionMode: 'fresh', responsibility: 'mission-execution',
+    }
+    if (model !== undefined) request.model = model
+    assert.throws(() => parseOpenClaudeWorkerRequest(JSON.stringify(request)), {
+      message,
+    })
   })
 }

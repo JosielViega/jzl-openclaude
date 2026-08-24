@@ -12,6 +12,7 @@ import { validateConfiguredProjectMission } from './mission-validation.js'
 import { createProjectContext } from './project-context.js'
 import { validateProjectRoot } from './project-root.js'
 import { runProjectMission } from './project-runner.js'
+import { configureProjectModel } from './model-router.js'
 
 const projectRootOption = {
   '--project-root': { required: true },
@@ -68,6 +69,17 @@ try {
     const options = parseCliOptions(argumentsList, projectRootOption)
 
     printJson({ missions: listReadyProjectMissions(createContext(options)) })
+  } else if (command === 'set-model') {
+    const options = parseCliOptions(argumentsList, {
+      ...projectRootOption,
+      '--responsibility': { required: true },
+      '--model': { required: true },
+    })
+
+    printJson(configureProjectModel(createContext(options), {
+      responsibility: options['--responsibility'],
+      model: options['--model'],
+    }))
   } else if (command === 'execute-mission') {
     const options = parseCliOptions(argumentsList, {
       ...projectRootOption,

@@ -33,10 +33,20 @@ test('limpa deadline quando a preparação falha antes de query', async () => {
     prompt: 'teste',
     sessionMode: 'fresh',
     responsibility: 'mission-review',
+    model: 'model-review',
   }), (error) => {
     assert.ok(error instanceof OpenClaudeQueryExecutionError)
     assert.equal(error.message, 'projectRoot deve ser um caminho absoluto')
     assert.equal(error.sessionId, null)
     return true
   })
+})
+
+test('rejeita model OpenClaude inválido antes de query', async () => {
+  for (const model of [undefined, null, 1, '   ']) {
+    await assert.rejects(executeOpenClaudeQuery({
+      projectRoot: 'qualquer-coisa', prompt: 'teste', sessionMode: 'fresh',
+      responsibility: 'mission-execution', model,
+    }), { message: 'model OpenClaude deve ser uma string não vazia' })
+  }
 })

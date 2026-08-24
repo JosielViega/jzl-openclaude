@@ -55,6 +55,10 @@ function validateExecutionData(data) {
     if (typeof data.result !== 'string') {
       throw new Error('result do evento de execução deve ser uma string')
     }
+
+    if (Object.hasOwn(data, 'model') && !isNonEmptyString(data.model)) {
+      throw new Error('model do evento de execução é inválido')
+    }
   } else {
     if (data.toStatus !== 'failed') {
       throw new Error('mapeamento do evento de execução é incoerente')
@@ -70,6 +74,14 @@ function validateExecutionData(data) {
       && !isNonEmptyString(data.sessionId)
     ) {
       throw new Error('sessionId do evento de execução é inválido')
+    }
+
+    if (
+      Object.hasOwn(data, 'model')
+      && data.model !== null
+      && !isNonEmptyString(data.model)
+    ) {
+      throw new Error('model do evento de execução é inválido')
     }
   }
 }
@@ -158,6 +170,10 @@ function validateReviewFinishedData(data) {
     throw new Error('sessionId do evento de revisão é inválido')
   }
 
+  if (Object.hasOwn(data, 'model') && !isNonEmptyString(data.model)) {
+    throw new Error('model do evento de revisão é inválido')
+  }
+
   validateMissionReviewResult({
     verdict: data.verdict,
     summary: data.summary,
@@ -168,6 +184,14 @@ function validateReviewFinishedData(data) {
 function validateReviewUnavailableData(data) {
   if (data.sessionId !== null && !isNonEmptyString(data.sessionId)) {
     throw new Error('sessionId do evento de revisão é inválido')
+  }
+
+  if (
+    Object.hasOwn(data, 'model')
+    && data.model !== null
+    && !isNonEmptyString(data.model)
+  ) {
+    throw new Error('model do evento de revisão é inválido')
   }
 
   if (!isNonEmptyString(data.errorMessage)) {

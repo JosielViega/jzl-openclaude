@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { test } from 'node:test'
 
 import { createProjectContext } from '../src/project-context.js'
+import { initializeProjectConfigStore } from '../src/project-config-store.js'
 import { readProjectEventStore } from '../src/project-event-store.js'
 import {
   initializeProjectStateStore,
@@ -65,7 +66,25 @@ test('Config ausente registra review unavailable e preserva validation', async (
   assert.equal(events[0].type, 'mission.review.unavailable')
   assert.deepEqual(events[0].data, {
     sessionId: null,
+    model: null,
     errorMessage: 'arquivo de configuração do projeto não existe',
+  })
+})
+
+test('modelo de review ausente registra unavailable com audit model null', async (t) => {
+  const context = createContext(t)
+  const mission = persistMission(context)
+  initializeProjectConfigStore(context, { template: 'traditional-web' })
+
+  await assert.rejects(reviewProjectMission(context, mission.id), {
+    message: 'modelo não configurado para responsabilidade mission-review',
+  })
+
+  assert.equal(readProjectStateStore(context).missions[0].status, 'validation')
+  assert.deepEqual(readProjectEventStore(context).events[0].data, {
+    sessionId: null,
+    model: null,
+    errorMessage: 'modelo não configurado para responsabilidade mission-review',
   })
 })
 

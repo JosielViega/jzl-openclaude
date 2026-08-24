@@ -4,6 +4,31 @@ function isObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
+const supportedModelResponsibilities = new Set([
+  'mission-execution',
+  'mission-review',
+])
+
+function validateModels(models) {
+  if (!isObject(models)) {
+    throw new Error('models da configuração do projeto deve ser um objeto')
+  }
+
+  for (const [responsibility, model] of Object.entries(models)) {
+    if (!supportedModelResponsibilities.has(responsibility)) {
+      throw new Error('responsabilidade de modelo da configuração não é suportada')
+    }
+
+    if (
+      typeof model !== 'string'
+      || model.trim() === ''
+      || model !== model.trim()
+    ) {
+      throw new Error('modelo da configuração do projeto deve ser uma string não vazia')
+    }
+  }
+}
+
 export function validateProjectConfig(config) {
   if (!isObject(config)) {
     throw new Error('configuração do projeto deve ser um objeto')
@@ -79,6 +104,10 @@ export function validateProjectConfig(config) {
     }
   }
 
+  if (config.models !== undefined) {
+    validateModels(config.models)
+  }
+
   return config
 }
 
@@ -92,6 +121,7 @@ export function createProjectConfig(input) {
   }
 
   let tools = input.tools
+  let models = input.models
 
   if (tools === undefined) {
     tools = {}
@@ -110,9 +140,14 @@ export function createProjectConfig(input) {
     }
   }
 
+  if (isObject(models)) {
+    models = { ...models }
+  }
+
   return validateProjectConfig({
     schemaVersion: 1,
     template: input.template,
     tools,
+    ...(models === undefined ? {} : { models }),
   })
 }

@@ -12,6 +12,7 @@ import {
 } from './mission-engine.js'
 import { buildMissionExecutionPrompt } from './mission-execution-prompt.js'
 import { resolveMissionCorrectionHandoff } from './handoff-processor.js'
+import { resolveProjectModelRoute } from './model-router.js'
 import { createMissionExecutionSession } from './session-manager.js'
 import { resolveProjectStandards } from './standards-resolver.js'
 
@@ -24,7 +25,13 @@ function errorSessionId(error) {
   ) ? error.sessionId : null
 }
 
-function persistTechnicalFailure(context, missionId, fromStatus, executionError) {
+function persistTechnicalFailure(
+  context,
+  missionId,
+  fromStatus,
+  model,
+  executionError,
+) {
   try {
     failProjectMission(context, missionId)
   } catch (stateError) {
@@ -40,6 +47,7 @@ function persistTechnicalFailure(context, missionId, fromStatus, executionError)
       fromStatus,
       error: executionError,
       sessionId: errorSessionId(executionError),
+      model,
     })
   } catch (historyError) {
     throw new AggregateError(
@@ -60,8 +68,10 @@ export async function executeProjectMission(context, missionId) {
   const runningMission = prepareProjectMissionExecution(context, missionId)
   let prompt
   let execution
+  let modelRoute = null
 
   try {
+    modelRoute = resolveProjectModelRoute(context, 'mission-execution')
     const standards = resolveProjectStandards(context)
     const executionContext = buildMissionExecutionContext(context, {
       mission: runningMission,
@@ -75,9 +85,16 @@ export async function executeProjectMission(context, missionId) {
       projectRoot: context.projectRoot,
       prompt,
       session,
+      modelRoute,
     })
   } catch (error) {
-    persistTechnicalFailure(context, missionId, fromStatus, error)
+    persistTechnicalFailure(
+      context,
+      missionId,
+      fromStatus,
+      modelRoute?.model ?? null,
+      error,
+    )
   }
 
   const validationMission = submitProjectMissionForValidation(

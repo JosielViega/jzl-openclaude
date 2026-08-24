@@ -15,6 +15,7 @@ export function recordMissionExecutionSuccess(context, input) {
       fromStatus: input.fromStatus,
       toStatus: 'validation',
       sessionId: input.execution.sessionId,
+      model: input.execution.model,
       result: input.execution.result,
     },
   })
@@ -29,6 +30,7 @@ export function recordMissionExecutionError(context, input) {
       fromStatus: input.fromStatus,
       toStatus: 'failed',
       sessionId: input.sessionId,
+      model: input.model,
       errorMessage: errorMessage(input.error),
     },
   })
@@ -64,6 +66,7 @@ export function recordMissionReviewFinished(context, input) {
     missionId: input.missionId,
     data: {
       sessionId: input.review.sessionId,
+      model: input.review.model,
       verdict: input.review.verdict,
       summary: input.review.summary,
       findings: input.review.findings,
@@ -77,6 +80,7 @@ export function recordMissionReviewUnavailable(context, input) {
     missionId: input.missionId,
     data: {
       sessionId: input.sessionId,
+      model: input.model,
       errorMessage: errorMessage(input.error),
     },
   })

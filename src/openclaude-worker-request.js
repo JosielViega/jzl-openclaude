@@ -53,9 +53,24 @@ export function parseOpenClaudeWorkerRequest(input) {
     throw new Error('responsibility do worker não é suportada')
   }
 
+  if (!Object.hasOwn(request, 'model')) {
+    throw new Error('model é obrigatório')
+  }
+
+  if (typeof request.model !== 'string') {
+    throw new Error('model deve ser uma string')
+  }
+
+  const validatedModel = request.model.trim()
+
+  if (validatedModel === '') {
+    throw new Error('model não pode ser vazio')
+  }
+
   return {
     prompt: validatedPrompt,
     sessionMode: request.sessionMode,
     responsibility: request.responsibility,
+    model: validatedModel,
   }
 }

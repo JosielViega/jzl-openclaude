@@ -24,7 +24,7 @@ export async function executeOpenClaudeQuery(input) {
     throw new Error('entrada deve ser um objeto')
   }
 
-  const { projectRoot, prompt, sessionMode, responsibility } = input
+  const { projectRoot, prompt, sessionMode, responsibility, model } = input
 
   if (typeof prompt !== 'string') {
     throw new Error('prompt deve ser uma string')
@@ -44,6 +44,12 @@ export async function executeOpenClaudeQuery(input) {
     throw new Error('responsabilidade OpenClaude não é suportada')
   }
 
+  if (typeof model !== 'string' || model.trim() === '') {
+    throw new Error('model OpenClaude deve ser uma string não vazia')
+  }
+
+  const validatedModel = model.trim()
+
   const guardrails = resolveOpenClaudeExecutionGuardrails(responsibility)
   const deadline = createOpenClaudeQueryDeadline(guardrails.queryTimeoutMs)
   let execution
@@ -54,6 +60,7 @@ export async function executeOpenClaudeQuery(input) {
       projectRoot,
       responsibility,
       deadline.abortController,
+      validatedModel,
     )
     execution = query({
       prompt: validatedPrompt,

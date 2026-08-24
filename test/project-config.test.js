@@ -98,3 +98,49 @@ test('createProjectConfig preserva a validação de argsPrefix inválido', () =>
     tools: { php: { executable: absolutePhp, argsPrefix: 'invalid' } },
   }), { message: 'argsPrefix PHP deve ser um array' })
 })
+
+test('models opcional aceita vazio, parcial, completo e IDs opacos', () => {
+  for (const models of [
+    {},
+    { 'mission-execution': 'qwen3.5-9b' },
+    { 'mission-review': 'provider/model:tag?x=y' },
+    { 'mission-execution': 'model-a', 'mission-review': 'model-b' },
+  ]) {
+    const config = { schemaVersion: 1, template: 'traditional-web', tools: {}, models }
+    assert.strictEqual(validateProjectConfig(config), config)
+  }
+  assert.strictEqual(validateProjectConfig({
+    schemaVersion: 1, template: 'traditional-web', tools: {},
+  }).models, undefined)
+})
+
+test('rejeita models e rotas de Config inválidos', () => {
+  const base = { schemaVersion: 1, template: 'traditional-web', tools: {} }
+  for (const models of [null, []]) {
+    assert.throws(() => validateProjectConfig({ ...base, models }), {
+      message: 'models da configuração do projeto deve ser um objeto',
+    })
+  }
+  assert.throws(() => validateProjectConfig({
+    ...base, models: { 'mission-reveiw': 'model' },
+  }), { message: 'responsabilidade de modelo da configuração não é suportada' })
+  for (const model of [null, 1, '', '   ', ' model', 'model ']) {
+    assert.throws(() => validateProjectConfig({
+      ...base, models: { 'mission-review': model },
+    }), { message: 'modelo da configuração do projeto deve ser uma string não vazia' })
+  }
+})
+
+test('createProjectConfig omite models ausente e clona models presente', () => {
+  const without = createProjectConfig({ template: 'traditional-web' })
+  assert.equal(Object.hasOwn(without, 'models'), false)
+
+  const models = { 'mission-execution': 'model-a' }
+  const input = { template: 'traditional-web', models }
+  const snapshot = structuredClone(input)
+  const config = createProjectConfig(input)
+  assert.deepEqual(config.models, models)
+  assert.notStrictEqual(config.models, models)
+  config.models['mission-execution'] = 'changed'
+  assert.deepEqual(input, snapshot)
+})

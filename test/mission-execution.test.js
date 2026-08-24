@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { test } from 'node:test'
 
 import { createProjectContext } from '../src/project-context.js'
+import { initializeProjectConfigStore } from '../src/project-config-store.js'
 import { executeProjectMission } from '../src/mission-execution.js'
 import { createProjectMission } from '../src/mission-engine.js'
 import {
@@ -143,8 +144,51 @@ test('config ausente falha Mission running antes de executar OpenClaude', async 
     fromStatus: 'pending',
     toStatus: 'failed',
     sessionId: null,
+    model: null,
     errorMessage: 'arquivo de configuração do projeto não existe',
   })
+})
+
+test('modelo de execution ausente falha fechada com audit model null', async (t) => {
+  const context = createTemporaryContext(t)
+  initializeProjectStateStore(context)
+  initializeProjectConfigStore(context, { template: 'traditional-web' })
+  const mission = createProjectMission(context, { title: 'A', objective: 'Executar A' })
+
+  await assert.rejects(executeProjectMission(context, mission.id), {
+    message: 'modelo não configurado para responsabilidade mission-execution',
+  })
+
+  assert.equal(readProjectStateStore(context).missions[0].status, 'failed')
+  assert.deepEqual(readProjectEventStore(context).events[0].data, {
+    outcome: 'ERROR',
+    fromStatus: 'pending',
+    toStatus: 'failed',
+    sessionId: null,
+    model: null,
+    errorMessage: 'modelo não configurado para responsabilidade mission-execution',
+  })
+})
+
+test('retry failed sem modelo volta a failed com audit model null', async (t) => {
+  const context = createTemporaryContext(t)
+  initializeProjectStateStore(context)
+  initializeProjectConfigStore(context, { template: 'traditional-web' })
+  writeProjectStateStore(context, {
+    schemaVersion: 1,
+    missions: [{
+      id: 'mission-0001', title: 'A', objective: 'A', status: 'failed', dependencies: [],
+    }],
+  })
+
+  await assert.rejects(executeProjectMission(context, 'mission-0001'), {
+    message: 'modelo não configurado para responsabilidade mission-execution',
+  })
+
+  const event = readProjectEventStore(context).events[0]
+  assert.equal(readProjectStateStore(context).missions[0].status, 'failed')
+  assert.equal(event.data.fromStatus, 'failed')
+  assert.equal(event.data.model, null)
 })
 
 test('erro técnico registra execução partindo de failed sem usar erro anterior', async (t) => {
@@ -278,11 +322,12 @@ test('correction com FAIL válido inicia e trata falha técnica normalmente', as
     id: 'mission-0001', title: 'A', objective: 'A', status: 'correction', dependencies: [],
   }
   initializeProjectStateStore(context)
+  initializeProjectConfigStore(context, { template: 'traditional-web' })
   writeProjectStateStore(context, { schemaVersion: 1, missions: [mission] })
   appendValidationFailure(context, mission.id)
 
   await assert.rejects(executeProjectMission(context, mission.id), {
-    message: 'arquivo de configuração do projeto não existe',
+    message: 'modelo não configurado para responsabilidade mission-execution',
   })
   assert.equal(readProjectStateStore(context).missions[0].status, 'failed')
   const event = readProjectEventStore(context).events.at(-1)
@@ -292,7 +337,8 @@ test('correction com FAIL válido inicia e trata falha técnica normalmente', as
     fromStatus: 'correction',
     toStatus: 'failed',
     sessionId: null,
-    errorMessage: 'arquivo de configuração do projeto não existe',
+    model: null,
+    errorMessage: 'modelo não configurado para responsabilidade mission-execution',
   })
 })
 

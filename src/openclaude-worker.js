@@ -18,6 +18,7 @@ async function main() {
     prompt: request.prompt,
     sessionMode: request.sessionMode,
     responsibility: request.responsibility,
+    model: request.model,
   })
 
   console.log(JSON.stringify(execution))

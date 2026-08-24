@@ -44,7 +44,7 @@ test('registra execution SUCCESS sem prompt ou projectRoot', (t) => {
   const created = recordMissionExecutionSuccess(context, {
     missionId: 'mission-0001',
     fromStatus: 'pending',
-    execution: { sessionId: 'session-1', result: 'resultado' },
+    execution: { sessionId: 'session-1', model: 'model-a', result: 'resultado' },
   })
 
   assert.deepEqual(created.data, {
@@ -52,6 +52,7 @@ test('registra execution SUCCESS sem prompt ou projectRoot', (t) => {
     fromStatus: 'pending',
     toStatus: 'validation',
     sessionId: 'session-1',
+    model: 'model-a',
     result: 'resultado',
   })
   assert.equal(JSON.stringify(created).includes('prompt'), false)
@@ -65,6 +66,7 @@ test('registra execution ERROR normalizando somente a mensagem', (t) => {
     fromStatus: 'correction',
     error: new Error('falha técnica'),
     sessionId: null,
+    model: null,
   })
 
   assert.deepEqual(created.data, {
@@ -72,6 +74,7 @@ test('registra execution ERROR normalizando somente a mensagem', (t) => {
     fromStatus: 'correction',
     toStatus: 'failed',
     sessionId: null,
+    model: null,
     errorMessage: 'falha técnica',
   })
   assert.equal(Object.hasOwn(created.data, 'stack'), false)
@@ -84,6 +87,7 @@ test('registra sessionId retornado em execution ERROR', (t) => {
     fromStatus: 'pending',
     error: new Error('provider falhou'),
     sessionId: 'session-openclaude',
+    model: 'model-a',
   })
 
   assert.equal(created.data.sessionId, 'session-openclaude')
@@ -143,17 +147,21 @@ test('registra review finished PASS e CONCERNS sem transição', (t) => {
   const context = createContext(t)
   const pass = recordMissionReviewFinished(context, {
     missionId: 'mission-0001',
-    review: { sessionId: 'review-1', verdict: 'PASS', summary: 'ok', findings: [] },
+    review: {
+      sessionId: 'review-1', model: 'review-model', verdict: 'PASS',
+      summary: 'ok', findings: [],
+    },
   })
   const concerns = recordMissionReviewFinished(context, {
     missionId: 'mission-0002',
     review: {
-      sessionId: 'review-2', verdict: 'CONCERNS', summary: 'problema',
+      sessionId: 'review-2', model: 'review-model', verdict: 'CONCERNS', summary: 'problema',
       findings: [{ severity: 'LOW', title: 'x', detail: 'y', paths: [] }],
     },
   })
 
   assert.equal(pass.type, 'mission.review.finished')
+  assert.equal(pass.data.model, 'review-model')
   assert.equal(concerns.data.verdict, 'CONCERNS')
   assert.equal(Object.hasOwn(pass.data, 'fromStatus'), false)
   assert.equal(Object.hasOwn(pass.data, 'toStatus'), false)
@@ -164,17 +172,18 @@ test('registra review unavailable com ou sem sessionId sem persistir Error', (t)
   const error = new Error('review falhou')
   error.cause = new Error('segredo')
   const unidentified = recordMissionReviewUnavailable(context, {
-    missionId: 'mission-0001', sessionId: null, error,
+    missionId: 'mission-0001', sessionId: null, model: null, error,
   })
   const identified = recordMissionReviewUnavailable(context, {
-    missionId: 'mission-0001', sessionId: 'review-session', error: 'inválido',
+    missionId: 'mission-0001', sessionId: 'review-session', model: 'review-model',
+    error: 'inválido',
   })
 
   assert.deepEqual(unidentified.data, {
-    sessionId: null, errorMessage: 'review falhou',
+    sessionId: null, model: null, errorMessage: 'review falhou',
   })
   assert.deepEqual(identified.data, {
-    sessionId: 'review-session', errorMessage: 'inválido',
+    sessionId: 'review-session', model: 'review-model', errorMessage: 'inválido',
   })
   assert.equal(JSON.stringify(unidentified).includes('stack'), false)
   assert.equal(JSON.stringify(unidentified).includes('segredo'), false)
