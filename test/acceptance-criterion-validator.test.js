@@ -133,6 +133,59 @@ test('alias interno normal é permitido e aliases protegidos falham fechado', (t
   }
 })
 
+test('alias de diretório protegido com target ausente produz ERROR sem vazamento', (t) => {
+  const { root, context } = project(t)
+  const protectedDirectories = ['.jzl', '.git', '.openclaude']
+
+  for (const directory of protectedDirectories) {
+    mkdirSync(join(root, directory))
+
+    try {
+      symlinkSync(
+        join(root, directory),
+        join(root, `${directory.slice(1)}-protected-alias`),
+        process.platform === 'win32' ? 'junction' : 'dir',
+      )
+    } catch (error) {
+      if (error?.code === 'EPERM') return t.skip('alias de diretório indisponível')
+      throw error
+    }
+  }
+
+  for (const type of [
+    'file-exists',
+    'file-not-exists',
+    'file-contains',
+    'file-not-contains',
+  ]) {
+    const input = criterion(
+      type,
+      'jzl-protected-alias/missing.json',
+      type.includes('contains') ? 'texto secreto' : undefined,
+    )
+    const value = runMissionAcceptanceCriterion(context, input)
+    const serialized = JSON.stringify(value)
+
+    assertResult(value, 'ERROR', null)
+    assert.equal(value.evidence.path, input.path)
+    assert.ok(value.evidence.errorMessage.length > 0)
+    assert.equal(serialized.includes(root), false)
+    assert.equal(serialized.includes(join(root, '.jzl', 'missing.json')), false)
+    assert.equal(serialized.includes('texto secreto'), false)
+  }
+
+  for (const alias of ['git-protected-alias', 'openclaude-protected-alias']) {
+    assertResult(
+      runMissionAcceptanceCriterion(
+        context,
+        criterion('file-not-exists', `${alias}/missing.json`),
+      ),
+      'ERROR',
+      null,
+    )
+  }
+})
+
 test('symlink externo e quebrado produzem ERROR', (t) => {
   const { root, context } = project(t)
   const external = mkdtempSync(join(tmpdir(), 'jzl-criterion-external-'))

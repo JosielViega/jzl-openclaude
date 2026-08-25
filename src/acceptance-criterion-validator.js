@@ -49,7 +49,13 @@ function resolveTarget(context, criterion) {
   const entry = lstatSync(lexicalPath, { throwIfNoEntry: false })
 
   if (entry === undefined) {
-    resolveProjectPathForCreate(context, criterion.path)
+    const candidatePath = resolveProjectPathForCreate(context, criterion.path)
+    const canonicalProjectPath = toProjectPath(context, candidatePath).replaceAll('\\', '/')
+    validateMissionAcceptanceCriterion({
+      ...criterion,
+      path: canonicalProjectPath,
+    })
+
     return { exists: false, path: null }
   }
 
