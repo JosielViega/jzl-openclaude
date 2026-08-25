@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -16,8 +16,10 @@ import {
   recordMissionPlanApproved,
   recordMissionValidationFinished,
   recordMissionValidationUnavailable,
+  resolveLatestMissionExecutionChangeSet,
 } from '../src/execution-history.js'
 import { createProjectContext } from '../src/project-context.js'
+import { appendProjectEvent, readProjectEventStore } from '../src/project-event-store.js'
 
 function createContext(t) {
   const root = mkdtempSync(join(tmpdir(), 'jzl-execution-history-'))
@@ -95,6 +97,88 @@ test('registra sessionId retornado em execution ERROR', (t) => {
 
   assert.equal(created.data.sessionId, 'session-openclaude')
   assert.equal(created.data.errorMessage, 'provider falhou')
+})
+
+test('recorders persistem Change Set em SUCCESS e object/null em ERROR', (t) => {
+  const context = createContext(t)
+  const changeSet = {
+    created: ['created.txt'], modified: ['modified.txt'], deleted: [],
+  }
+  const success = recordMissionExecutionSuccess(context, {
+    missionId: 'mission-0001', fromStatus: 'pending',
+    execution: {
+      sessionId: 'session-1', model: 'model-a', result: 'ok', changeSet,
+    },
+  })
+  const error = recordMissionExecutionError(context, {
+    missionId: 'mission-0001', fromStatus: 'failed', error: new Error('falha'),
+    sessionId: null, model: null, changeSet: null,
+  })
+  const errorWithChanges = recordMissionExecutionError(context, {
+    missionId: 'mission-0001', fromStatus: 'correction', error: new Error('falha'),
+    sessionId: 'session-error', model: 'model-a', changeSet,
+  })
+  assert.deepEqual(success.data.changeSet, changeSet)
+  assert.equal(error.data.changeSet, null)
+  assert.deepEqual(errorWithChanges.data.changeSet, changeSet)
+  changeSet.created[0] = 'mutado.txt'
+  assert.equal(readProjectEventStore(context).events[0].data.changeSet.created[0], 'created.txt')
+})
+
+test('resolve último Change Set SUCCESS como clone e ignora ERROR', (t) => {
+  const withoutHistory = createContext(t)
+  assert.equal(resolveLatestMissionExecutionChangeSet(withoutHistory, 'mission-0001'), null)
+
+  const context = createContext(t)
+  recordMissionExecutionSuccess(context, {
+    missionId: 'mission-0001', fromStatus: 'pending',
+    execution: { sessionId: 'legacy', model: 'm', result: 'legacy' },
+  })
+  assert.equal(resolveLatestMissionExecutionChangeSet(context, 'mission-0001'), null)
+
+  const first = { created: ['first.txt'], modified: [], deleted: [] }
+  recordMissionExecutionSuccess(context, {
+    missionId: 'mission-0001', fromStatus: 'failed',
+    execution: { sessionId: 'first', model: 'm', result: 'ok', changeSet: first },
+  })
+  recordMissionValidationUnavailable(context, {
+    missionId: 'mission-0001', error: 'sem validator',
+  })
+  recordMissionExecutionError(context, {
+    missionId: 'mission-0001', fromStatus: 'failed', error: 'erro',
+    sessionId: null, model: null,
+    changeSet: { created: ['ignored.txt'], modified: [], deleted: [] },
+  })
+  const second = { created: [], modified: ['second.txt'], deleted: [] }
+  recordMissionExecutionSuccess(context, {
+    missionId: 'mission-0001', fromStatus: 'correction',
+    execution: { sessionId: 'second', model: 'm', result: 'ok', changeSet: second },
+  })
+
+  const resolved = resolveLatestMissionExecutionChangeSet(context, 'mission-0001')
+  assert.deepEqual(resolved, second)
+  assert.notStrictEqual(resolved, readProjectEventStore(context).events.at(-1).data.changeSet)
+  resolved.modified[0] = 'mutado.txt'
+  assert.equal(resolveLatestMissionExecutionChangeSet(context, 'mission-0001').modified[0], 'second.txt')
+})
+
+test('resolver retorna null sem execution e propaga histórico corrompido', (t) => {
+  const withoutExecution = createContext(t)
+  recordMissionValidationUnavailable(withoutExecution, {
+    missionId: 'mission-0001', error: 'sem execution',
+  })
+  assert.equal(resolveLatestMissionExecutionChangeSet(withoutExecution, 'mission-0001'), null)
+
+  const corrupt = createContext(t)
+  appendProjectEvent(corrupt, {
+    type: 'mission.validation.unavailable', missionId: 'mission-0001',
+    data: { status: 'validation', errorMessage: 'x' },
+  })
+  writeFileSync(join(corrupt.projectRoot, '.jzl', 'events.json'), '{')
+  assert.throws(
+    () => resolveLatestMissionExecutionChangeSet(corrupt, 'mission-0001'),
+    { message: 'arquivo de histórico do projeto contém JSON inválido' },
+  )
 })
 
 test('registra validation finished e unavailable', (t) => {

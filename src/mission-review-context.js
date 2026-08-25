@@ -1,3 +1,4 @@
+import { validateExecutionChangeSet } from './execution-change-set.js'
 import { validateMission } from './mission.js'
 import { validateProjectRoot } from './project-root.js'
 
@@ -42,8 +43,19 @@ export function buildMissionReviewContext(context, input) {
   validateStandards(input.standards)
   validateProjectRoot(context?.projectRoot)
 
-  return {
+  const reviewContext = {
     mission: structuredClone(input.mission),
     standards: structuredClone(input.standards),
   }
+
+  if (Object.hasOwn(input, 'changeSet')) {
+    if (input.changeSet === undefined || input.changeSet === null) {
+      reviewContext.changeSet = null
+    } else {
+      validateExecutionChangeSet(input.changeSet)
+      reviewContext.changeSet = structuredClone(input.changeSet)
+    }
+  }
+
+  return reviewContext
 }

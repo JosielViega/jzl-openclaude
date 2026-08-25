@@ -66,6 +66,10 @@ Executa verificações determinísticas de estado, escopo, dependências, crité
 
 OpenClaude `SUCCESS` técnico não equivale a Mission concluída. Acceptance Criteria são condições determinísticas definidas pelo Host/JZL, persistidas de forma imutável na Mission e avaliadas pelo Validator Engine sem derivação a partir do modelo. O v1 suporta `file-exists`, `file-not-exists`, `file-contains` e `file-not-contains`; esses critérios entram na mesma agregação dos validators configurados, onde `PASS` permite conclusão, `FAIL` solicita correção e `ERROR` mantém validação. Conteúdo de arquivo não é persistido como evidence, e `planning.validation[]` permanece apenas consultivo.
 
+### Execution Change Set
+
+Observa deterministicamente o efeito de cada tentativa de execução no filesystem. Snapshots before/after e seus SHA-256 internos não são persistidos; o Event Log recebe somente paths `created`, `modified` e `deleted`, excluindo `.jzl`, `.git` e `.openclaude` e sem percorrer symlinks ou junctions. O Change Set não determina `PASS` ou `FAIL`: um conjunto vazio não significa falha, e Acceptance Criteria e Validators continuam sendo a autoridade. Erros técnicos podem registrar um Change Set quando a observação final for possível, e Mission Review recebe somente o Change Set da última execução `SUCCESS` como contexto, sem transcript.
+
 ### Handoff Processor
 
 Valida e processa Handoffs estruturados entre responsabilidades. Transfere resultados e informações resumíveis sem depender do compartilhamento automático de transcripts.

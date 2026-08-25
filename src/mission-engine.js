@@ -122,3 +122,12 @@ export function prepareProjectMissionExecution(context, missionId) {
     prepareMissionExecution,
   )
 }
+
+export function validateProjectMissionExecutionPreconditions(context, missionId) {
+  const state = readProjectStateStore(context)
+  const existingMissions = getProjectStateMissions(state)
+
+  prepareMissionExecution(existingMissions, missionId)
+
+  return structuredClone(getMissionById(existingMissions, missionId))
+}

@@ -75,6 +75,28 @@ test('aceita execution ERROR legacy e sessionId string ou null', () => {
   assert.strictEqual(validateProjectEvent(unidentified), unidentified)
 })
 
+test('valida Change Set opcional em eventos SUCCESS e ERROR', () => {
+  const changeSet = {
+    created: ['created.txt'], modified: ['modified.txt'], deleted: ['deleted.txt'],
+  }
+  for (const value of [
+    executionSuccess({ changeSet }),
+    executionError({ changeSet }),
+    executionError({ changeSet: null }),
+  ]) assert.strictEqual(validateProjectEvent(value), value)
+
+  assert.throws(() => validateProjectEvent(executionSuccess({ changeSet: null })), {
+    message: 'Change Set deve ser um objeto',
+  })
+  assert.throws(() => validateProjectEvent(executionSuccess({
+    changeSet: { created: ['.jzl/state.json'], modified: [], deleted: [] },
+  })), { message: 'path do Change Set pertence a namespace de controle' })
+  assert.throws(() => validateProjectEvent(executionError({ changeSet: 'invalid' })), {
+    message: 'Change Set deve ser um objeto',
+  })
+  assert.equal(JSON.stringify(executionSuccess({ changeSet })).includes('digest'), false)
+})
+
 test('audita model opcional em eventos de execução sem quebrar legacy', () => {
   for (const value of [
     executionSuccess(),

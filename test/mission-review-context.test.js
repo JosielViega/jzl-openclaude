@@ -31,6 +31,27 @@ test('constrói contexto mínimo clonado para Mission validation', (t) => {
   assert.equal(input.standards.instructions[0], 'Seja simples.')
 })
 
+test('inclui Change Set válido como clone e normaliza null explícito', (t) => {
+  const context = setup(t)
+  const changeSet = {
+    created: ['created.txt'], modified: ['modified.txt'], deleted: ['deleted.txt'],
+  }
+  const built = buildMissionReviewContext(context, {
+    mission: mission(), standards: standards(), changeSet,
+  })
+  assert.deepEqual(built.changeSet, changeSet)
+  assert.notStrictEqual(built.changeSet, changeSet)
+  built.changeSet.created[0] = 'mutado.txt'
+  assert.equal(changeSet.created[0], 'created.txt')
+
+  assert.equal(buildMissionReviewContext(context, {
+    mission: mission(), standards: standards(), changeSet: null,
+  }).changeSet, null)
+  assert.throws(() => buildMissionReviewContext(context, {
+    mission: mission(), standards: standards(), changeSet: { created: [], modified: [] },
+  }), { message: 'deleted do Change Set deve ser um array' })
+})
+
 test('rejeita status diferente de validation', (t) => {
   assert.throws(() => buildMissionReviewContext(setup(t), {
     mission: mission('running'), standards: standards(),

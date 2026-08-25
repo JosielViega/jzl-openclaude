@@ -117,6 +117,22 @@ test('rejeita dependency bloqueada sem iniciar execução', async (t) => {
   assert.equal(existsSync(join(context.projectRoot, '.jzl', 'events.json')), false)
 })
 
+test('falha no snapshot BEFORE preserva pending e não cria execution event', async (t) => {
+  const context = createTemporaryContext(t)
+  initializeProjectStateStore(context)
+  const mission = createProjectMission(context, { title: 'A', objective: 'A' })
+  const longSegments = Array.from({ length: 6 }, (_, index) => (
+    `${index}-${'x'.repeat(87)}`
+  ))
+  mkdirSync(join(context.projectRoot, ...longSegments), { recursive: true })
+
+  await assert.rejects(executeProjectMission(context, mission.id), {
+    message: 'path do snapshot excede o limite permitido',
+  })
+  assert.equal(readProjectStateStore(context).missions[0].status, 'pending')
+  assert.equal(existsSync(join(context.projectRoot, '.jzl', 'events.json')), false)
+})
+
 test('pending com plan.finished sem approval continua execução normal', async (t) => {
   const context = createTemporaryContext(t)
   initializeProjectStateStore(context)
@@ -234,6 +250,7 @@ test('config ausente falha Mission running antes de executar OpenClaude', async 
     sessionId: null,
     model: null,
     errorMessage: 'arquivo de configuração do projeto não existe',
+    changeSet: { created: [], modified: [], deleted: [] },
   })
 })
 
@@ -255,6 +272,7 @@ test('modelo de execution ausente falha fechada com audit model null', async (t)
     sessionId: null,
     model: null,
     errorMessage: 'modelo não configurado para responsabilidade mission-execution',
+    changeSet: { created: [], modified: [], deleted: [] },
   })
 })
 
@@ -427,6 +445,7 @@ test('correction com FAIL válido inicia e trata falha técnica normalmente', as
     sessionId: null,
     model: null,
     errorMessage: 'modelo não configurado para responsabilidade mission-execution',
+    changeSet: { created: [], modified: [], deleted: [] },
   })
 })
 

@@ -1,3 +1,4 @@
+import { validateExecutionChangeSet } from './execution-change-set.js'
 import { isMissionAcceptanceCriterionType } from './mission-acceptance-criterion.js'
 import { validateMissionReviewResult } from './mission-review-result.js'
 import { validateMissionPlanningResult } from './mission-planning-result.js'
@@ -88,6 +89,14 @@ function validateExecutionData(data) {
     ) {
       throw new Error('model do evento de execução é inválido')
     }
+  }
+
+  if (Object.hasOwn(data, 'changeSet')) {
+    if (data.outcome === 'ERROR' && data.changeSet === null) {
+      return
+    }
+
+    validateExecutionChangeSet(data.changeSet)
   }
 }
 

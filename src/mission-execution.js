@@ -1,4 +1,5 @@
 import { executeOpenClaudeText } from './openclaude-execution-adapter.js'
+import { createExecutionChangeSet } from './execution-change-set.js'
 import { buildMissionExecutionContext } from './context-builder.js'
 import {
   recordMissionExecutionError,
@@ -9,6 +10,7 @@ import {
   getProjectMission,
   prepareProjectMissionExecution,
   submitProjectMissionForValidation,
+  validateProjectMissionExecutionPreconditions,
 } from './mission-engine.js'
 import { buildMissionExecutionPrompt } from './mission-execution-prompt.js'
 import {
@@ -16,6 +18,7 @@ import {
   resolveMissionPlanExecutionHandoff,
 } from './handoff-processor.js'
 import { resolveProjectModelRoute } from './model-router.js'
+import { createProjectFilesystemSnapshot } from './project-filesystem-snapshot.js'
 import { createMissionExecutionSession } from './session-manager.js'
 import { resolveProjectStandards } from './standards-resolver.js'
 
@@ -33,6 +36,8 @@ function persistTechnicalFailure(
   missionId,
   fromStatus,
   model,
+  sessionId,
+  changeSet,
   executionError,
 ) {
   try {
@@ -49,8 +54,9 @@ function persistTechnicalFailure(
       missionId,
       fromStatus,
       error: executionError,
-      sessionId: errorSessionId(executionError),
+      sessionId: sessionId ?? errorSessionId(executionError),
       model,
+      changeSet,
     })
   } catch (historyError) {
     throw new AggregateError(
@@ -72,6 +78,9 @@ export async function executeProjectMission(context, missionId) {
   } else if (fromStatus === 'pending') {
     handoff = resolveMissionPlanExecutionHandoff(context, missionId)
   }
+
+  validateProjectMissionExecutionPreconditions(context, missionId)
+  const beforeSnapshot = createProjectFilesystemSnapshot(context)
   const runningMission = prepareProjectMissionExecution(context, missionId)
   let prompt
   let execution
@@ -95,13 +104,50 @@ export async function executeProjectMission(context, missionId) {
       modelRoute,
     })
   } catch (error) {
+    let changeSet = null
+    let executionError = error
+
+    try {
+      const afterSnapshot = createProjectFilesystemSnapshot(context)
+      changeSet = createExecutionChangeSet(beforeSnapshot, afterSnapshot)
+    } catch (snapshotError) {
+      executionError = new AggregateError(
+        [error, snapshotError],
+        'A execução falhou e o Change Set não pôde ser calculado',
+      )
+    }
+
     persistTechnicalFailure(
       context,
       missionId,
       fromStatus,
       modelRoute?.model ?? null,
-      error,
+      errorSessionId(error),
+      changeSet,
+      executionError,
     )
+  }
+
+  let changeSet
+
+  try {
+    const afterSnapshot = createProjectFilesystemSnapshot(context)
+    changeSet = createExecutionChangeSet(beforeSnapshot, afterSnapshot)
+  } catch (snapshotError) {
+    persistTechnicalFailure(
+      context,
+      missionId,
+      fromStatus,
+      execution.model,
+      execution.sessionId,
+      null,
+      snapshotError,
+    )
+  }
+
+  const auditedExecution = {
+    ...execution,
+    changeSet,
   }
 
   const validationMission = submitProjectMissionForValidation(
@@ -112,11 +158,11 @@ export async function executeProjectMission(context, missionId) {
   recordMissionExecutionSuccess(context, {
     missionId,
     fromStatus,
-    execution,
+    execution: auditedExecution,
   })
 
   return {
     mission: validationMission,
-    execution,
+    execution: auditedExecution,
   }
 }

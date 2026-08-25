@@ -22,6 +22,7 @@ import {
   retryProjectMissionCorrection,
   startProjectMission,
   submitProjectMissionForValidation,
+  validateProjectMissionExecutionPreconditions,
 } from '../src/mission-engine.js'
 import {
   initializeProjectStateStore,
@@ -696,6 +697,76 @@ test('prepara execução persistida a partir de pending, failed e correction', (
 
     assert.equal(runningMission.status, 'running')
     assert.equal(readProjectStateStore(context).missions[0].status, 'running')
+  }
+})
+
+test('preflight aceita pending, failed e correction sem persistir transição', (t) => {
+  for (const status of ['pending', 'failed', 'correction']) {
+    const { context, projectRoot } = createTemporaryProject(t)
+    const dependency = createExistingMission('mission-0001', { status: 'completed' })
+    const mission = createExistingMission('mission-0002', {
+      status,
+      dependencies: [dependency.id],
+    })
+    initializeProjectStateStore(context)
+    writeProjectStateStore(context, {
+      schemaVersion: 1,
+      missions: [dependency, mission],
+    })
+    const statePath = join(projectRoot, '.jzl', 'state.json')
+    const before = readFileSync(statePath, 'utf8')
+    const validated = validateProjectMissionExecutionPreconditions(context, mission.id)
+
+    assert.deepEqual(validated, mission)
+    assert.notStrictEqual(validated, mission)
+    assert.equal(readFileSync(statePath, 'utf8'), before)
+    assert.equal(existsSync(join(projectRoot, '.jzl', 'events.json')), false)
+  }
+})
+
+test('preflight rejeita dependencies bloqueadas sem alterar State ou Event Store', (t) => {
+  for (const status of ['pending', 'failed', 'correction']) {
+    const { context, projectRoot } = createTemporaryProject(t)
+    const dependency = createExistingMission('mission-0001')
+    const mission = createExistingMission('mission-0002', {
+      status,
+      dependencies: [dependency.id],
+    })
+    initializeProjectStateStore(context)
+    writeProjectStateStore(context, {
+      schemaVersion: 1,
+      missions: [dependency, mission],
+    })
+    const statePath = join(projectRoot, '.jzl', 'state.json')
+    const before = readFileSync(statePath, 'utf8')
+
+    assert.throws(
+      () => validateProjectMissionExecutionPreconditions(context, mission.id),
+      {
+        message: status === 'pending'
+          ? 'Mission não está pronta para iniciar'
+          : 'Mission não está pronta para nova execução',
+      },
+    )
+    assert.equal(readFileSync(statePath, 'utf8'), before)
+    assert.equal(existsSync(join(projectRoot, '.jzl', 'events.json')), false)
+  }
+})
+
+test('preflight rejeita statuses não executáveis sem alterar State', (t) => {
+  for (const status of ['running', 'validation', 'completed']) {
+    const { context, projectRoot } = createTemporaryProject(t)
+    const mission = createExistingMission('mission-0001', { status })
+    initializeProjectStateStore(context)
+    writeProjectStateStore(context, { schemaVersion: 1, missions: [mission] })
+    const statePath = join(projectRoot, '.jzl', 'state.json')
+    const before = readFileSync(statePath, 'utf8')
+
+    assert.throws(
+      () => validateProjectMissionExecutionPreconditions(context, mission.id),
+      { message: 'Mission não pode ser executada no status atual' },
+    )
+    assert.equal(readFileSync(statePath, 'utf8'), before)
   }
 })
 

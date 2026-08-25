@@ -1,6 +1,7 @@
 import {
   recordMissionReviewFinished,
   recordMissionReviewUnavailable,
+  resolveLatestMissionExecutionChangeSet,
 } from './execution-history.js'
 import { getProjectMission } from './mission-engine.js'
 import { buildMissionReviewContext } from './mission-review-context.js'
@@ -37,9 +38,11 @@ export async function reviewProjectMission(context, missionId) {
   try {
     modelRoute = resolveProjectModelRoute(context, 'mission-review')
     const standards = resolveProjectStandards(context)
+    const changeSet = resolveLatestMissionExecutionChangeSet(context, missionId)
     const reviewContext = buildMissionReviewContext(context, {
       mission,
       standards,
+      changeSet,
     })
     const prompt = buildMissionReviewPrompt(reviewContext)
     const session = createMissionReviewSession(mission)

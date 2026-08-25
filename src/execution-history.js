@@ -1,3 +1,4 @@
+import { validateExecutionChangeSet } from './execution-change-set.js'
 import { appendProjectEvent, readProjectEventStore } from './project-event-store.js'
 
 const missionIdPattern = /^mission-\d{4,}$/
@@ -7,6 +8,10 @@ function errorMessage(error) {
 }
 
 export function recordMissionExecutionSuccess(context, input) {
+  const changeSet = Object.hasOwn(input.execution, 'changeSet')
+    ? { changeSet: structuredClone(input.execution.changeSet) }
+    : {}
+
   return appendProjectEvent(context, {
     type: 'mission.execution.finished',
     missionId: input.missionId,
@@ -17,11 +22,16 @@ export function recordMissionExecutionSuccess(context, input) {
       sessionId: input.execution.sessionId,
       model: input.execution.model,
       result: input.execution.result,
+      ...changeSet,
     },
   })
 }
 
 export function recordMissionExecutionError(context, input) {
+  const changeSet = Object.hasOwn(input, 'changeSet')
+    ? { changeSet: structuredClone(input.changeSet) }
+    : {}
+
   return appendProjectEvent(context, {
     type: 'mission.execution.finished',
     missionId: input.missionId,
@@ -32,6 +42,7 @@ export function recordMissionExecutionError(context, input) {
       sessionId: input.sessionId,
       model: input.model,
       errorMessage: errorMessage(input.error),
+      ...changeSet,
     },
   })
 }
@@ -146,4 +157,40 @@ export function listProjectHistory(context, missionId) {
   return events
     .filter((event) => missionId === undefined || event.missionId === missionId)
     .map((event) => structuredClone(event))
+}
+
+export function resolveLatestMissionExecutionChangeSet(context, missionId) {
+  let events
+
+  try {
+    events = listProjectHistory(context, missionId)
+  } catch (error) {
+    if (
+      error instanceof Error
+      && error.message === 'arquivo de histórico do projeto não existe'
+    ) {
+      return null
+    }
+
+    throw error
+  }
+
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index]
+
+    if (
+      event.type === 'mission.execution.finished'
+      && event.data.outcome === 'SUCCESS'
+      && event.data.toStatus === 'validation'
+    ) {
+      if (!Object.hasOwn(event.data, 'changeSet')) {
+        return null
+      }
+
+      validateExecutionChangeSet(event.data.changeSet)
+      return structuredClone(event.data.changeSet)
+    }
+  }
+
+  return null
 }
