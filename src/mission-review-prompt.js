@@ -1,8 +1,19 @@
+import { renderMissionAcceptanceCriteria } from './mission-acceptance-prompt.js'
+
 export function buildMissionReviewPrompt(reviewContext) {
   const { mission, standards } = reviewContext
   const standardsList = standards.instructions
     .map((instruction) => `- ${instruction}`)
     .join('\n')
+  const renderedCriteria = renderMissionAcceptanceCriteria(
+    mission.acceptanceCriteria,
+  )
+  const acceptanceSection = renderedCriteria === '' ? '' : `
+
+${renderedCriteria}
+
+Esses critérios são condições determinísticas definidas pelo JZL e podem ser usados como contexto da revisão.
+O reviewer não decide sua avaliação final; o Validator Engine mantém essa autoridade.`
 
   return `Você está revisando uma Mission controlada pelo JZL.
 
@@ -16,7 +27,7 @@ Título:
 ${mission.title}
 
 Objetivo:
-${mission.objective}
+${mission.objective}${acceptanceSection}
 
 Padrões aplicáveis:
 ${standardsList}

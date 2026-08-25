@@ -1,8 +1,24 @@
+import { renderMissionAcceptanceCriteria } from './mission-acceptance-prompt.js'
+
 function renderDiagnosticValue(value) {
   return value === null ? 'null' : String(value)
 }
 
 function renderFailedValidator(validator) {
+  if (validator.evidence.criterionType !== undefined) {
+    return `Acceptance Criterion:
+${validator.id}
+
+Tipo:
+${validator.evidence.criterionType}
+
+Path:
+${validator.evidence.path}
+
+Satisfeito:
+${validator.evidence.satisfied}`
+  }
+
   return `Validator:
 ${validator.id}
 
@@ -173,7 +189,7 @@ ${handoff.payload.summary}
 
 IMPORTANTE:
 O plano abaixo foi produzido probabilisticamente por uma sessão de mission-planning e autorizado explicitamente pelo JZL como contexto de execução.
-Ele não substitui a Mission, os standards nem o estado atual do código.
+Ele não substitui a Mission, os standards, os Acceptance Criteria nem o estado atual do código.
 Verifique cada passo contra o projeto atual e adapte ou ignore qualquer detalhe que tenha ficado incompatível.
 Não amplie desnecessariamente o escopo.
 
@@ -218,6 +234,17 @@ export function buildMissionExecutionPrompt(executionContext) {
     .map((instruction) => `- ${instruction}`)
     .join('\n')
   const handoffSection = renderHandoff(handoff)
+  const renderedCriteria = renderMissionAcceptanceCriteria(
+    mission.acceptanceCriteria,
+  )
+  const acceptanceSection = renderedCriteria === '' ? '' : `
+
+${renderedCriteria}
+
+Os critérios acima foram definidos deterministicamente pelo JZL.
+Implemente a Mission de modo que todos sejam satisfeitos.
+Não altere, remova ou reinterprete esses critérios.
+O Validator Engine verificará os critérios após a execução.`
 
   return `Você está executando uma Mission controlada pelo JZL.
 
@@ -228,7 +255,7 @@ Título:
 ${mission.title}
 
 Objetivo:
-${mission.objective}
+${mission.objective}${acceptanceSection}
 
 Padrões aplicáveis:
 ${standardsList}${handoffSection}

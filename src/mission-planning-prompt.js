@@ -1,9 +1,20 @@
+import { renderMissionAcceptanceCriteria } from './mission-acceptance-prompt.js'
+
 export function buildMissionPlanningPrompt(planningContext) {
   const { mission, standards } = planningContext
   const dependencies = mission.dependencies.length === 0
     ? '(nenhuma)'
     : mission.dependencies.map((dependency) => `- ${dependency}`).join('\n')
   const standardsList = standards.instructions.map((instruction) => `- ${instruction}`).join('\n')
+  const renderedCriteria = renderMissionAcceptanceCriteria(
+    mission.acceptanceCriteria,
+  )
+  const acceptanceSection = renderedCriteria === '' ? '' : `
+
+${renderedCriteria}
+
+Considere esses critérios no plano, sem alterá-los ou reinterpretá-los.
+O campo validation[] produzido pelo planejamento é consultivo e não cria novos Acceptance Criteria.`
 
   return `Você está planejando uma Mission controlada pelo JZL.
 
@@ -17,7 +28,7 @@ Título:
 ${mission.title}
 
 Objetivo:
-${mission.objective}
+${mission.objective}${acceptanceSection}
 
 Dependências:
 ${dependencies}

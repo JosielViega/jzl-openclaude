@@ -386,3 +386,23 @@ test('Review Handoff contextual não compartilha findings nem propaga campos ext
   assert.equal(Object.hasOwn(built.handoff, 'extra'), false)
   assert.equal(Object.hasOwn(built.handoff.payload, 'omittedCount'), false)
 })
+
+test('preserva metadata compacta de failed criterion sem compartilhar Handoff', (t) => {
+  const context = createContext(t)
+  const raw = handoff({ payload: { failedValidators: [{
+    id: 'criterion-0001', status: 'FAIL',
+    evidence: {
+      exitCode: null, signal: null, stdout: '', stderr: '', errorMessage: null,
+      criterionType: 'file-not-contains', path: 'index.html', satisfied: false,
+    },
+  }] } })
+  const built = buildMissionExecutionContext(context, {
+    mission: mission(), standards: standards(), handoff: raw,
+  })
+  assert.deepEqual(built.handoff.payload.failedValidators[0].evidence, {
+    exitCode: null, signal: null, stdout: '', stderr: '', errorMessage: null,
+    criterionType: 'file-not-contains', path: 'index.html', satisfied: false,
+  })
+  built.handoff.payload.failedValidators[0].evidence.path = 'changed'
+  assert.equal(raw.payload.failedValidators[0].evidence.path, 'index.html')
+})

@@ -54,6 +54,14 @@ function sanitizeDiagnosticText(text, redactProjectRoot) {
 }
 
 function cloneFailedValidator(result, redactProjectRoot) {
+  const criterionEvidence = result.evidence.criterionType === undefined
+    ? {}
+    : {
+        criterionType: result.evidence.criterionType,
+        path: truncateText(redactProjectRoot(result.evidence.path), 500),
+        satisfied: result.evidence.satisfied,
+      }
+
   return {
     id: result.id,
     status: result.status,
@@ -65,6 +73,7 @@ function cloneFailedValidator(result, redactProjectRoot) {
       errorMessage: typeof result.evidence.errorMessage === 'string'
         ? sanitizeDiagnosticText(result.evidence.errorMessage, redactProjectRoot)
         : null,
+      ...criterionEvidence,
     },
   }
 }

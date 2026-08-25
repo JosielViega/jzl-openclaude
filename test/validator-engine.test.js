@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, normalize } from 'node:path'
 import { test } from 'node:test'
@@ -209,4 +209,57 @@ test('valida toda configuração antes de iniciar qualquer processo', (t) => {
     { message: 'executable do validator deve ser um caminho absoluto' },
   )
   assert.equal(existsSync(sentinelPath), false)
+})
+
+test('executa criteria e command no mesmo engine preservando ordem', (t) => {
+  const { context, projectRoot } = createTemporaryContext(t)
+  writeFileSync(join(projectRoot, 'index.html'), 'AFTER')
+  const validators = [
+    { id: 'criterion-0001', type: 'file-contains', path: 'index.html', text: 'AFTER' },
+    createValidator('command-pass', ''),
+  ]
+  const validation = runProjectValidators(context, validators)
+  assert.equal(validation.status, 'PASS')
+  assert.deepEqual(validation.results.map(({ id }) => id), ['criterion-0001', 'command-pass'])
+})
+
+test('agrega criteria com ERROR acima de FAIL e executa todos', (t) => {
+  const { context, projectRoot } = createTemporaryContext(t)
+  writeFileSync(join(projectRoot, 'index.html'), 'BEFORE')
+  writeFileSync(join(projectRoot, 'invalid.bin'), Buffer.from([0xff]))
+  const validation = runProjectValidators(context, [
+    { id: 'criterion-0001', type: 'file-contains', path: 'index.html', text: 'AFTER' },
+    { id: 'criterion-0002', type: 'file-contains', path: 'invalid.bin', text: 'x' },
+    createValidator('command-pass', ''),
+  ])
+  assert.equal(validation.status, 'ERROR')
+  assert.deepEqual(validation.results.map(({ status }) => status), ['FAIL', 'ERROR', 'PASS'])
+})
+
+test('agrega FAIL entre criterion e command nos dois sentidos', (t) => {
+  const first = createTemporaryContext(t)
+  writeFileSync(join(first.projectRoot, 'index.html'), 'BEFORE')
+  const criterionFail = runProjectValidators(first.context, [
+    { id: 'criterion-0001', type: 'file-contains', path: 'index.html', text: 'AFTER' },
+    createValidator('command-pass', ''),
+  ])
+  assert.equal(criterionFail.status, 'FAIL')
+  assert.deepEqual(criterionFail.results.map(({ status }) => status), ['FAIL', 'PASS'])
+
+  const second = createTemporaryContext(t)
+  writeFileSync(join(second.projectRoot, 'index.html'), 'AFTER')
+  const commandFail = runProjectValidators(second.context, [
+    { id: 'criterion-0001', type: 'file-contains', path: 'index.html', text: 'AFTER' },
+    createValidator('command-fail', 'process.exit(1)'),
+  ])
+  assert.equal(commandFail.status, 'FAIL')
+  assert.deepEqual(commandFail.results.map(({ status }) => status), ['PASS', 'FAIL'])
+})
+
+test('rejeita IDs duplicados entre criterion e command', (t) => {
+  const { context } = createTemporaryContext(t)
+  assert.throws(() => runProjectValidators(context, [
+    { id: 'criterion-0001', type: 'file-not-exists', path: 'missing.txt' },
+    createValidator('criterion-0001', ''),
+  ]), { message: 'ids dos validators não podem ser duplicados' })
 })

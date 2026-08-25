@@ -132,7 +132,8 @@ test('renderiza Plan Handoff consultivo autorizado sem identidade do Planner', (
     'mission-planning', 'event-000123', 'event-000124', 'mission-execution',
     'Plano aprovado.', 'Atualizar marcador', 'Trocar o texto.', '- index.html',
     '- Risco A', '- Validar A', 'produzido probabilisticamente',
-    'autorizado explicitamente pelo JZL', 'não substitui a Mission, os standards',
+    'autorizado explicitamente pelo JZL',
+    'não substitui a Mission, os standards, os Acceptance Criteria',
     'Validator Engine do JZL continua sendo a autoridade determinística',
     'orientação estruturada',
   ]) assert.ok(prompt.includes(text))
@@ -245,4 +246,24 @@ test('renderiza Review Correction Handoff com autorização e aviso probabilíst
 test('renderiza finding de revisão sem path específico', () => {
   const prompt = buildMissionExecutionPrompt(createExecutionContext(reviewHandoff([])))
   assert.ok(prompt.includes('Paths:\n(nenhum path específico)'))
+})
+
+test('renderiza acceptance criteria autoritativos e failed criterion compacto', () => {
+  const context = createExecutionContext(handoff({ payload: { failedValidators: [{
+    id: 'criterion-0001', status: 'FAIL',
+    evidence: {
+      exitCode: null, signal: null, stdout: '', stderr: '', errorMessage: null,
+      criterionType: 'file-not-contains', path: 'index.html', satisfied: false,
+    },
+  }] } }))
+  context.mission.acceptanceCriteria = [{
+    id: 'criterion-0001', type: 'file-not-contains', path: 'index.html', text: 'BEFORE',
+  }]
+  const prompt = buildMissionExecutionPrompt(context)
+  for (const value of [
+    'Critérios de aceitação determinísticos', 'BEFORE',
+    'Implemente a Mission de modo que todos sejam satisfeitos',
+    'Acceptance Criterion:', 'Satisfeito:\nfalse',
+  ]) assert.ok(prompt.includes(value))
+  assert.equal(prompt.includes('Exit code:\nnull'), false)
 })

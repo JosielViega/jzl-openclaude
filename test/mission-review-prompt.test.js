@@ -53,3 +53,15 @@ test('não inclui histórico de execução, Handoff ou transcript e não muta co
   assert.equal(prompt.includes('segredo-session'), false)
   assert.deepEqual(value, snapshot)
 })
+
+test('review recebe criteria como contexto sem autoridade determinística', () => {
+  const value = context()
+  value.mission.acceptanceCriteria = [{
+    id: 'criterion-0001', type: 'file-exists', path: 'index.html',
+  }]
+  const prompt = buildMissionReviewPrompt(value)
+  for (const value of [
+    'criterion-0001', 'file-exists', 'condições determinísticas',
+    'reviewer não decide', 'Validator Engine mantém essa autoridade',
+  ]) assert.ok(prompt.includes(value))
+})

@@ -1,5 +1,6 @@
 import { validateMissionReviewResult } from './mission-review-result.js'
 import { validateMissionPlanningResult } from './mission-planning-result.js'
+import { isMissionAcceptanceCriterionType } from './mission-acceptance-criterion.js'
 
 const missionIdPattern = /^mission-\d{4,}$/
 const eventIdPattern = /^event-\d{6,}$/
@@ -8,7 +9,8 @@ function isObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
-function validateEvidence(evidence) {
+function validateEvidence(validator) {
+  const { evidence } = validator
   if (!isObject(evidence)) {
     throw new Error('evidence do validator do handoff deve ser um objeto')
   }
@@ -34,6 +36,35 @@ function validateEvidence(evidence) {
     && typeof evidence.errorMessage !== 'string'
   ) {
     throw new Error('errorMessage da evidence do handoff é inválido')
+  }
+
+  const fields = ['criterionType', 'path', 'satisfied']
+  const present = fields.filter((field) => Object.hasOwn(evidence, field))
+
+  if (present.length === 0) {
+    return
+  }
+
+  if (present.length !== fields.length) {
+    throw new Error('metadata do acceptance criterion no handoff é incompleta')
+  }
+
+  if (!/^criterion-\d{4,}$/.test(validator.id)) {
+    throw new Error('id do acceptance criterion do handoff é inválido')
+  }
+
+  if (
+    !isMissionAcceptanceCriterionType(evidence.criterionType)
+    || typeof evidence.path !== 'string'
+    || evidence.path === ''
+    || evidence.satisfied !== false
+    || evidence.exitCode !== null
+    || evidence.signal !== null
+    || evidence.stdout !== ''
+    || evidence.stderr !== ''
+    || evidence.errorMessage !== null
+  ) {
+    throw new Error('evidence do acceptance criterion do handoff é inválida')
   }
 }
 
@@ -186,7 +217,7 @@ export function validateHandoff(handoff) {
       throw new Error('status do validator do handoff deve ser FAIL')
     }
 
-    validateEvidence(validator.evidence)
+    validateEvidence(validator)
   }
 
   return handoff

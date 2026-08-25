@@ -215,3 +215,34 @@ test('preserva campos aditivos e conteúdo com projectRoot sem mutação', () =>
     'falha em C:\\projeto\\index.php',
   )
 })
+
+test('aceita failed acceptance criterion em mission-correction', () => {
+  const value = validHandoff({
+    payload: { failedValidators: [{
+      id: 'criterion-0001', status: 'FAIL',
+      evidence: {
+        exitCode: null, signal: null, stdout: '', stderr: '', errorMessage: null,
+        criterionType: 'file-not-contains', path: 'index.html', satisfied: false,
+      },
+    }] },
+  })
+  const snapshot = structuredClone(value)
+  assert.strictEqual(validateHandoff(value), value)
+  assert.deepEqual(value, snapshot)
+  assert.equal(JSON.stringify(value).includes('BEFORE'), false)
+})
+
+test('rejeita evidence incoerente de criterion no handoff', () => {
+  const value = validHandoff({
+    payload: { failedValidators: [{
+      id: 'criterion-0001', status: 'FAIL',
+      evidence: {
+        exitCode: null, signal: null, stdout: 'vazamento', stderr: '', errorMessage: null,
+        criterionType: 'file-contains', path: 'index.html', satisfied: false,
+      },
+    }] },
+  })
+  assert.throws(() => validateHandoff(value), {
+    message: 'evidence do acceptance criterion do handoff é inválida',
+  })
+})

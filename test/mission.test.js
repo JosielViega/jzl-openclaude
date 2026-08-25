@@ -175,6 +175,7 @@ test('cria a primeira Mission com shape exato', () => {
     objective: 'Executar primeira tarefa',
     status: 'pending',
     dependencies: [],
+    acceptanceCriteria: [],
   })
   assert.deepEqual(Object.keys(mission), [
     'id',
@@ -182,6 +183,7 @@ test('cria a primeira Mission com shape exato', () => {
     'objective',
     'status',
     'dependencies',
+    'acceptanceCriteria',
   ])
 })
 
@@ -282,6 +284,43 @@ test('criação mantém id e status sob controle do JZL', () => {
     () => createMission([], { ...input, status: 'pending' }),
     { message: 'status inicial da nova Mission é controlado pelo JZL' },
   )
+})
+
+test('aceita Mission legacy e valida acceptanceCriteria quando presente', () => {
+  const legacy = createValidMission()
+  assert.equal(Object.hasOwn(legacy, 'acceptanceCriteria'), false)
+  assert.strictEqual(validateMission(legacy), legacy)
+  const withCriteria = createValidMission({ acceptanceCriteria: [{
+    id: 'criterion-0001', type: 'file-exists', path: 'index.html',
+  }] })
+  assert.strictEqual(validateMission(withCriteria), withCriteria)
+  assert.throws(
+    () => validateMission(createValidMission({ acceptanceCriteria: [{}] })),
+    { message: 'id do acceptance criterion é inválido' },
+  )
+})
+
+test('cria criteria canônicos e transitions os preservam', () => {
+  const inputs = [{ type: 'file-contains', path: 'index.html', text: 'AFTER' }]
+  const snapshot = structuredClone(inputs)
+  const pending = createMission([], {
+    title: 'Atualizar', objective: 'Trocar marcador', acceptanceCriteria: inputs,
+  })
+  assert.deepEqual(pending.acceptanceCriteria, [{
+    id: 'criterion-0001', type: 'file-contains', path: 'index.html', text: 'AFTER',
+  }])
+  const running = startMission([pending], pending.id)
+  const validation = submitMissionForValidation([running], running.id)
+  const correction = requestMissionCorrection([validation], validation.id)
+  const retried = retryMissionCorrection([correction], correction.id)
+  const failed = failMission([retried], retried.id)
+  const retriedFailure = retryMission([failed], failed.id)
+  const validationAgain = submitMissionForValidation([retriedFailure], retriedFailure.id)
+  const completed = completeMission([validationAgain], validationAgain.id)
+  for (const mission of [running, validation, correction, retried, failed, retriedFailure, completed]) {
+    assert.deepEqual(mission.acceptanceCriteria, pending.acceptanceCriteria)
+  }
+  assert.deepEqual(inputs, snapshot)
 })
 
 test('deriva readiness sem dependências pelo status', () => {

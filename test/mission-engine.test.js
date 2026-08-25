@@ -61,6 +61,7 @@ test('persiste a primeira Mission do projeto', (t) => {
     objective: 'Executar primeira tarefa',
     status: 'pending',
     dependencies: [],
+    acceptanceCriteria: [],
   }
 
   initializeProjectStateStore(context)
@@ -95,6 +96,24 @@ test('persiste a segunda Mission com o próximo id', (t) => {
     readProjectStateStore(context).missions.map((mission) => mission.id),
     [first.id, second.id],
   )
+})
+
+test('persiste acceptance criteria e preserva legacy State', (t) => {
+  const { context } = createTemporaryProject(t)
+  initializeProjectStateStore(context)
+  const created = createProjectMission(context, {
+    title: 'Com critério', objective: 'Validar arquivo',
+    acceptanceCriteria: [{ type: 'file-exists', path: 'index.html' }],
+  })
+  assert.deepEqual(created.acceptanceCriteria, [{
+    id: 'criterion-0001', type: 'file-exists', path: 'index.html',
+  }])
+  assert.deepEqual(readProjectStateStore(context).missions[0], created)
+
+  const legacy = createExistingMission('mission-0002')
+  writeProjectStateStore(context, { schemaVersion: 1, missions: [legacy] })
+  assert.deepEqual(getProjectMission(context, legacy.id), legacy)
+  assert.equal(Object.hasOwn(getProjectMission(context, legacy.id), 'acceptanceCriteria'), false)
 })
 
 test('persiste dependência e preserva a Mission existente', (t) => {

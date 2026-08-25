@@ -62,6 +62,10 @@ Sessões probabilísticas possuem um budget temporal determinístico definido pe
 
 Executa verificações determinísticas de estado, escopo, dependências, critérios e artefatos. Uma afirmação do modelo de que o trabalho terminou não constitui validação.
 
+### Mission Acceptance Criteria
+
+OpenClaude `SUCCESS` técnico não equivale a Mission concluída. Acceptance Criteria são condições determinísticas definidas pelo Host/JZL, persistidas de forma imutável na Mission e avaliadas pelo Validator Engine sem derivação a partir do modelo. O v1 suporta `file-exists`, `file-not-exists`, `file-contains` e `file-not-contains`; esses critérios entram na mesma agregação dos validators configurados, onde `PASS` permite conclusão, `FAIL` solicita correção e `ERROR` mantém validação. Conteúdo de arquivo não é persistido como evidence, e `planning.validation[]` permanece apenas consultivo.
+
 ### Handoff Processor
 
 Valida e processa Handoffs estruturados entre responsabilidades. Transfere resultados e informações resumíveis sem depender do compartilhamento automático de transcripts.

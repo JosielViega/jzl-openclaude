@@ -2,6 +2,11 @@ import { spawnSync } from 'node:child_process'
 import { isAbsolute } from 'node:path'
 
 import { validateProjectRoot } from './project-root.js'
+import { runMissionAcceptanceCriterion } from './acceptance-criterion-validator.js'
+import {
+  isMissionAcceptanceCriterionType,
+  validateMissionAcceptanceCriterion,
+} from './mission-acceptance-criterion.js'
 
 function validateValidatorDefinition(validator) {
   if (validator === null || typeof validator !== 'object' || Array.isArray(validator)) {
@@ -29,7 +34,12 @@ function validateValidatorDefinition(validator) {
   }
 
   if (validator.type !== 'command') {
-    throw new Error('type do validator não é suportado')
+    if (!isMissionAcceptanceCriterionType(validator.type)) {
+      throw new Error('type do validator não é suportado')
+    }
+
+    validateMissionAcceptanceCriterion(validator)
+    return
   }
 
   if (validator.executable === undefined) {
@@ -157,9 +167,11 @@ export function runProjectValidators(context, validators) {
 
   validateValidators(validators)
 
-  const results = validators.map(
-    (validator) => runValidator(projectRoot, validator),
-  )
+  const results = validators.map((validator) => (
+    validator.type === 'command'
+      ? runValidator(projectRoot, validator)
+      : runMissionAcceptanceCriterion(context, validator)
+  ))
   let status = 'PASS'
 
   if (results.some((result) => result.status === 'ERROR')) {

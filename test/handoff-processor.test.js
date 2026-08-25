@@ -118,6 +118,27 @@ test('resolve o último FAIL compatível como Handoff canônico', (t) => {
   })
 })
 
+test('transporta failed acceptance criteria sem texto autoritativo', (t) => {
+  const context = createContext(t)
+  const criterionResult = {
+    id: 'criterion-0002', status: 'FAIL',
+    evidence: {
+      exitCode: null, signal: null, stdout: '', stderr: '', errorMessage: null,
+      criterionType: 'file-contains', path: 'index.html', satisfied: false,
+    },
+  }
+  const commandResult = result('php-syntax:index.php')
+  const source = appendValidation(context, {
+    results: [criterionResult, commandResult],
+  })
+  const handoff = resolveMissionCorrectionHandoff(context, 'mission-0001')
+  assert.equal(handoff.source.eventId, source.id)
+  assert.deepEqual(handoff.payload.failedValidators, [criterionResult, commandResult])
+  assert.equal(JSON.stringify(handoff).includes('expected text'), false)
+  handoff.payload.failedValidators[0].evidence.path = 'changed'
+  assert.equal(readProjectEventStore(context).events[0].data.results[0].evidence.path, 'index.html')
+})
+
 test('Plan Handoff é opcional sem histórico, approval ou somente com plan', (t) => {
   const missing = createContext(t)
   assert.equal(resolveMissionPlanExecutionHandoff(missing, 'mission-0001'), null)

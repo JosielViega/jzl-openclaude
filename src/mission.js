@@ -1,3 +1,8 @@
+import {
+  createMissionAcceptanceCriteria,
+  validateMissionAcceptanceCriteria,
+} from './mission-acceptance-criterion.js'
+
 const missionIdPattern = /^mission-\d{4,}$/
 
 function validateMissionTextField(mission, fieldName) {
@@ -142,6 +147,10 @@ export function validateMission(mission) {
 
   validateMissionDependencies(mission.dependencies, mission.id)
 
+  if (Object.hasOwn(mission, 'acceptanceCriteria')) {
+    validateMissionAcceptanceCriteria(mission.acceptanceCriteria)
+  }
+
   return mission
 }
 
@@ -168,6 +177,9 @@ export function createMission(existingMissions, input) {
     : input.dependencies
 
   validateMissionDependencies(dependencies)
+  const acceptanceCriteria = createMissionAcceptanceCriteria(
+    input.acceptanceCriteria,
+  )
 
   for (const dependencyId of dependencies) {
     if (!missionsById.has(dependencyId)) {
@@ -195,6 +207,7 @@ export function createMission(existingMissions, input) {
     objective: input.objective,
     status: 'pending',
     dependencies: [...dependencies],
+    acceptanceCriteria,
   }
 }
 

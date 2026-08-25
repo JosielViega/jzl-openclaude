@@ -113,6 +113,53 @@ test('aceita validation PASS, FAIL e ERROR coerentes', () => {
   }
 })
 
+test('aceita evidence de criterion PASS, FAIL e ERROR', () => {
+  for (const [status, toStatus, satisfied, errorMessage] of [
+    ['PASS', 'completed', true, null],
+    ['FAIL', 'correction', false, null],
+    ['ERROR', 'validation', null, 'falha de leitura'],
+  ]) {
+    const value = validation(status, toStatus, {
+      results: [{
+        id: 'criterion-0001', status,
+        evidence: evidence({
+          exitCode: null, criterionType: 'file-exists', path: 'index.html',
+          satisfied, errorMessage,
+        }),
+      }],
+    })
+    assert.strictEqual(validateProjectEvent(value), value)
+  }
+})
+
+test('rejeita metadata de criterion incompleta ou incoerente', () => {
+  const base = {
+    exitCode: null, signal: null, stdout: '', stderr: '', errorMessage: null,
+    criterionType: 'file-exists', path: 'index.html', satisfied: true,
+  }
+  const cases = [
+    [{ ...base, criterionType: 'other' }, 'criterionType da evidence não é suportado'],
+    [{ ...base, path: undefined }, 'path da evidence do acceptance criterion é inválido'],
+    [{ ...base, satisfied: false }, 'satisfied da evidence é incoerente com o status'],
+    [{ ...base, stdout: 'conteúdo' }, 'evidence do acceptance criterion possui output inválido'],
+    [{ ...base, stderr: 'erro' }, 'evidence do acceptance criterion possui output inválido'],
+    [{ ...base, exitCode: 0 }, 'evidence do acceptance criterion possui output inválido'],
+    [{ ...base, errorMessage: 'erro' }, 'errorMessage da evidence do acceptance criterion é inválido'],
+  ]
+  for (const [criterionEvidence, message] of cases) {
+    const value = validation('PASS', 'completed', {
+      results: [{ id: 'criterion-0001', status: 'PASS', evidence: criterionEvidence }],
+    })
+    assert.throws(() => validateProjectEvent(value), { message })
+  }
+  const missing = validation('PASS', 'completed', {
+    results: [{ id: 'criterion-0001', status: 'PASS', evidence: evidence({ criterionType: 'file-exists' }) }],
+  })
+  assert.throws(() => validateProjectEvent(missing), {
+    message: 'metadata do acceptance criterion na evidence é incompleta',
+  })
+})
+
 test('aceita validation unavailable', () => {
   const value = event('mission.validation.unavailable', {
     status: 'validation',

@@ -148,6 +148,7 @@ test('create-mission retorna Mission criada', (t) => {
     objective: 'Executar A',
     status: 'pending',
     dependencies: [],
+    acceptanceCriteria: [],
   })
 })
 
@@ -164,6 +165,39 @@ test('create-mission aceita --depends-on repetido e preserva ordem', (t) => {
   ])
 
   assert.deepEqual(output.dependencies, ['mission-0002', 'mission-0001'])
+})
+
+test('create-mission aceita JSON repeatable de acceptance criteria', (t) => {
+  const root = createRoot(t)
+  initProject(root)
+  const { output } = runJsonCli([
+    'create-mission', '--project-root', root,
+    '--title', 'Aceitar', '--objective', 'Validar',
+    '--acceptance', JSON.stringify({ type: 'file-exists', path: 'index.html' }),
+    '--acceptance', JSON.stringify({ type: 'file-contains', path: 'index.html', text: 'AFTER' }),
+  ])
+  assert.deepEqual(output.acceptanceCriteria, [
+    { id: 'criterion-0001', type: 'file-exists', path: 'index.html' },
+    { id: 'criterion-0002', type: 'file-contains', path: 'index.html', text: 'AFTER' },
+  ])
+})
+
+test('create-mission rejeita acceptance inválido sem ambiguidade', (t) => {
+  const root = createRoot(t)
+  initProject(root)
+  for (const [value, message] of [
+    ['{', '--acceptance deve conter JSON válido'],
+    ['[]', 'acceptance criterion deve ser um objeto'],
+    [JSON.stringify({ type: 'other', path: 'index.html' }), 'type do acceptance criterion não é suportado'],
+    [JSON.stringify({ type: 'file-exists', path: '.jzl/state.json' }), 'path do acceptance criterion é protegido'],
+  ]) {
+    const result = runCli([
+      'create-mission', '--project-root', root,
+      '--title', 'Inválida', '--objective', 'Não criar', '--acceptance', value,
+    ])
+    assert.equal(result.status, 1)
+    assert.equal(result.stderr.trim(), message)
+  }
 })
 
 test('list-ready retorna somente Missions prontas sem persistir ready', (t) => {

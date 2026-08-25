@@ -401,6 +401,119 @@ test('validação configurada PHP ERROR mantém Mission validation', async (t) =
   assertEvidenceNotPersisted(readProjectStateStore(context))
 })
 
+test('Acceptance Criteria são incorporados antes dos validators fornecidos', async (t) => {
+  const { context, projectRoot } = createTemporaryContext(t)
+  writeFileSync(join(projectRoot, 'index.html'), 'AFTER')
+  const mission = createMission('mission-0001', 'validation', {
+    acceptanceCriteria: [
+      { id: 'criterion-0001', type: 'file-exists', path: 'index.html' },
+      { id: 'criterion-0002', type: 'file-contains', path: 'index.html', text: 'AFTER' },
+    ],
+  })
+  const snapshot = structuredClone(mission.acceptanceCriteria)
+  initializeMissions(context, [mission])
+  const output = await validateProjectMission(context, mission.id, [createValidator('command')])
+  assert.equal(output.validation.status, 'PASS')
+  assert.equal(output.mission.status, 'completed')
+  assert.deepEqual(output.validation.results.map(({ id }) => id), [
+    'criterion-0001', 'criterion-0002', 'command',
+  ])
+  assert.deepEqual(mission.acceptanceCriteria, snapshot)
+})
+
+test('criterion FAIL envia para correction e ERROR mantém validation', async (t) => {
+  const failProject = createTemporaryContext(t)
+  writeFileSync(join(failProject.projectRoot, 'index.html'), 'BEFORE')
+  const failMission = createMission('mission-0001', 'validation', {
+    acceptanceCriteria: [{ id: 'criterion-0001', type: 'file-contains', path: 'index.html', text: 'AFTER' }],
+  })
+  initializeMissions(failProject.context, [failMission])
+  const failed = await validateProjectMission(failProject.context, failMission.id, [])
+  assert.equal(failed.validation.status, 'FAIL')
+  assert.equal(failed.mission.status, 'correction')
+
+  const errorProject = createTemporaryContext(t)
+  writeFileSync(join(errorProject.projectRoot, 'invalid.bin'), Buffer.from([0xff]))
+  const errorMission = createMission('mission-0001', 'validation', {
+    acceptanceCriteria: [{ id: 'criterion-0001', type: 'file-contains', path: 'invalid.bin', text: 'x' }],
+  })
+  initializeMissions(errorProject.context, [errorMission])
+  const errored = await validateProjectMission(errorProject.context, errorMission.id, [])
+  assert.equal(errored.validation.status, 'ERROR')
+  assert.equal(errored.mission.status, 'validation')
+})
+
+test('combina criteria e command com FAIL e ERROR na Mission Validation', async (t) => {
+  const criterionFailProject = createTemporaryContext(t)
+  writeFileSync(join(criterionFailProject.projectRoot, 'index.html'), 'BEFORE')
+  const criterionFailMission = createMission('mission-0001', 'validation', {
+    acceptanceCriteria: [{ id: 'criterion-0001', type: 'file-contains', path: 'index.html', text: 'AFTER' }],
+  })
+  initializeMissions(criterionFailProject.context, [criterionFailMission])
+  const criterionFail = await validateProjectMission(
+    criterionFailProject.context,
+    criterionFailMission.id,
+    [createValidator('command-pass')],
+  )
+  assert.equal(criterionFail.validation.status, 'FAIL')
+  assert.equal(criterionFail.mission.status, 'correction')
+  assert.deepEqual(criterionFail.validation.results.map(({ status }) => status), ['FAIL', 'PASS'])
+
+  const commandFailProject = createTemporaryContext(t)
+  writeFileSync(join(commandFailProject.projectRoot, 'index.html'), 'AFTER')
+  const commandFailMission = createMission('mission-0001', 'validation', {
+    acceptanceCriteria: [{ id: 'criterion-0001', type: 'file-contains', path: 'index.html', text: 'AFTER' }],
+  })
+  initializeMissions(commandFailProject.context, [commandFailMission])
+  const commandFail = await validateProjectMission(
+    commandFailProject.context,
+    commandFailMission.id,
+    [createValidator('command-fail', 1)],
+  )
+  assert.equal(commandFail.validation.status, 'FAIL')
+  assert.equal(commandFail.mission.status, 'correction')
+  assert.deepEqual(commandFail.validation.results.map(({ status }) => status), ['PASS', 'FAIL'])
+
+  const commandErrorProject = createTemporaryContext(t)
+  writeFileSync(join(commandErrorProject.projectRoot, 'index.html'), 'BEFORE')
+  const commandErrorMission = createMission('mission-0001', 'validation', {
+    acceptanceCriteria: [{ id: 'criterion-0001', type: 'file-contains', path: 'index.html', text: 'AFTER' }],
+  })
+  initializeMissions(commandErrorProject.context, [commandErrorMission])
+  const commandError = await validateProjectMission(
+    commandErrorProject.context,
+    commandErrorMission.id,
+    [createMissingValidator(commandErrorProject.projectRoot)],
+  )
+  assert.equal(commandError.validation.status, 'ERROR')
+  assert.equal(commandError.mission.status, 'validation')
+  assert.deepEqual(commandError.validation.results.map(({ status }) => status), ['FAIL', 'ERROR'])
+})
+
+test('configured HTML-only usa criteria e legacy vazio mantém unavailable', async (t) => {
+  const acceptedProject = createTemporaryContext(t)
+  writeFileSync(join(acceptedProject.projectRoot, 'index.html'), 'ok')
+  const acceptedMission = createMission('mission-0001', 'validation', {
+    acceptanceCriteria: [{ id: 'criterion-0001', type: 'file-exists', path: 'index.html' }],
+  })
+  initializeMissions(acceptedProject.context, [acceptedMission])
+  initializeProjectConfigStore(acceptedProject.context, { template: 'traditional-web', tools: {} })
+  const accepted = await validateConfiguredProjectMission(acceptedProject.context, acceptedMission.id)
+  assert.equal(accepted.validation.status, 'PASS')
+  assert.equal(accepted.mission.status, 'completed')
+
+  const legacyProject = createTemporaryContext(t)
+  const legacyMission = createMission('mission-0001')
+  initializeMissions(legacyProject.context, [legacyMission])
+  initializeProjectConfigStore(legacyProject.context, { template: 'traditional-web', tools: {} })
+  await assert.rejects(
+    validateConfiguredProjectMission(legacyProject.context, legacyMission.id),
+    { message: 'ao menos um validator é obrigatório' },
+  )
+  assert.equal(readProjectStateStore(legacyProject.context).missions[0].status, 'validation')
+  assert.equal(readProjectEventStore(legacyProject.context).events[0].type, 'mission.validation.unavailable')
+})
+
 test('validação configurada executa todos os PHP de primeira parte', async (t) => {
   const { context, projectRoot } = createTemporaryContext(t)
   const mission = createMission('mission-0001')

@@ -36,7 +36,13 @@ export async function validateProjectMission(context, missionId, validators) {
   let validation
 
   try {
-    validation = runProjectValidators(context, validators)
+    const acceptanceValidators = structuredClone(
+      mission.acceptanceCriteria ?? [],
+    )
+    validation = runProjectValidators(context, [
+      ...acceptanceValidators,
+      ...validators,
+    ])
   } catch (error) {
     recordUnavailableAndThrow(context, missionId, error)
   }

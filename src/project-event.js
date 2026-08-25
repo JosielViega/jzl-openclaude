@@ -1,3 +1,4 @@
+import { isMissionAcceptanceCriterionType } from './mission-acceptance-criterion.js'
 import { validateMissionReviewResult } from './mission-review-result.js'
 import { validateMissionPlanningResult } from './mission-planning-result.js'
 
@@ -90,7 +91,58 @@ function validateExecutionData(data) {
   }
 }
 
-function validateEvidence(evidence) {
+function validateCriterionEvidence(result, evidence) {
+  const fields = ['criterionType', 'path', 'satisfied']
+  const present = fields.filter((field) => Object.hasOwn(evidence, field))
+
+  if (present.length === 0) {
+    return
+  }
+
+  if (present.length !== fields.length) {
+    throw new Error('metadata do acceptance criterion na evidence é incompleta')
+  }
+
+  if (!/^criterion-\d{4,}$/.test(result.id)) {
+    throw new Error('id do resultado de acceptance criterion é inválido')
+  }
+
+  if (!isMissionAcceptanceCriterionType(evidence.criterionType)) {
+    throw new Error('criterionType da evidence não é suportado')
+  }
+
+  if (typeof evidence.path !== 'string' || evidence.path === '') {
+    throw new Error('path da evidence do acceptance criterion é inválido')
+  }
+
+  const expectedSatisfied = { PASS: true, FAIL: false, ERROR: null }[result.status]
+
+  if (evidence.satisfied !== expectedSatisfied) {
+    throw new Error('satisfied da evidence é incoerente com o status')
+  }
+
+  if (
+    evidence.exitCode !== null
+    || evidence.signal !== null
+    || evidence.stdout !== ''
+    || evidence.stderr !== ''
+  ) {
+    throw new Error('evidence do acceptance criterion possui output inválido')
+  }
+
+  if (
+    (result.status === 'ERROR' && (
+      typeof evidence.errorMessage !== 'string'
+      || evidence.errorMessage.trim() === ''
+    ))
+    || (result.status !== 'ERROR' && evidence.errorMessage !== null)
+  ) {
+    throw new Error('errorMessage da evidence do acceptance criterion é inválido')
+  }
+}
+
+function validateEvidence(result) {
+  const { evidence } = result
   if (!isObject(evidence)) {
     throw new Error('evidence do resultado de validação deve ser um objeto')
   }
@@ -117,6 +169,8 @@ function validateEvidence(evidence) {
   ) {
     throw new Error('errorMessage da evidence deve ser string ou null')
   }
+
+  validateCriterionEvidence(result, evidence)
 }
 
 function validateValidationResult(result) {
@@ -132,7 +186,7 @@ function validateValidationResult(result) {
     throw new Error('status do resultado de validação não é suportado')
   }
 
-  validateEvidence(result.evidence)
+  validateEvidence(result)
 }
 
 function validateValidationData(data) {

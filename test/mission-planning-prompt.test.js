@@ -55,3 +55,16 @@ test('não inclui campos externos e não muta o contexto', () => {
   }
   assert.deepEqual(value, snapshot)
 })
+
+test('planning vê criteria sem poder criá-los e mantém validation consultivo', () => {
+  const value = context()
+  value.mission.acceptanceCriteria = [{
+    id: 'criterion-0001', type: 'file-contains', path: 'index.html', text: 'AFTER',
+  }]
+  const prompt = buildMissionPlanningPrompt(value)
+  for (const value of [
+    'criterion-0001', 'AFTER', 'sem alterá-los ou reinterpretá-los',
+    'validation[] produzido pelo planejamento é consultivo',
+    'não cria novos Acceptance Criteria',
+  ]) assert.ok(prompt.includes(value))
+})

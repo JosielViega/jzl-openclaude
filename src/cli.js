@@ -28,6 +28,16 @@ function createContext(options) {
   return createProjectContext(options['--project-root'])
 }
 
+function parseAcceptanceCriteria(values) {
+  return values.map((value) => {
+    try {
+      return JSON.parse(value)
+    } catch {
+      throw new Error('--acceptance deve conter JSON válido')
+    }
+  })
+}
+
 const [command, ...argumentsList] = process.argv.slice(2)
 
 try {
@@ -60,12 +70,14 @@ try {
       '--title': { required: true },
       '--objective': { required: true },
       '--depends-on': { repeatable: true },
+      '--acceptance': { repeatable: true },
     })
 
     printJson(createProjectMission(createContext(options), {
       title: options['--title'],
       objective: options['--objective'],
       dependencies: options['--depends-on'],
+      acceptanceCriteria: parseAcceptanceCriteria(options['--acceptance']),
     }))
   } else if (command === 'list-ready') {
     const options = parseCliOptions(argumentsList, projectRootOption)
