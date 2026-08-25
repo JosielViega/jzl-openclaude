@@ -6,7 +6,9 @@ import {
 import {
   recordMissionValidationFinished,
   recordMissionValidationUnavailable,
+  resolveLatestMissionExecutionChangeSet,
 } from './execution-history.js'
+import { createMissionChangeScopeValidator } from './mission-change-scope-validator.js'
 import { runProjectValidators } from './validator-engine.js'
 import { resolveProjectValidators } from './standards-resolver.js'
 
@@ -36,10 +38,17 @@ export async function validateProjectMission(context, missionId, validators) {
   let validation
 
   try {
+    const scopeValidators = Object.hasOwn(mission, 'changeScope')
+      ? [createMissionChangeScopeValidator(
+          mission.changeScope,
+          resolveLatestMissionExecutionChangeSet(context, missionId),
+        )]
+      : []
     const acceptanceValidators = structuredClone(
       mission.acceptanceCriteria ?? [],
     )
     validation = runProjectValidators(context, [
+      ...scopeValidators,
       ...acceptanceValidators,
       ...validators,
     ])

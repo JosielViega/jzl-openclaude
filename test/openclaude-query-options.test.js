@@ -42,6 +42,21 @@ test('retorna somente as opções mínimas autorizadas', () => {
   assert.equal(options.forkSession, undefined)
 })
 
+test('Change Scope chega somente ao canUseTool e não altera QueryOptions', async () => {
+  const options = createOpenClaudeQueryOptions(
+    temporaryDirectory,
+    'mission-execution',
+    abortController,
+    'model-a',
+    { allowedPaths: [] },
+  )
+  assert.deepEqual(Object.keys(options).sort(), ['abortController', 'canUseTool', 'cwd', 'model'])
+  assert.equal(Object.hasOwn(options, 'changeScope'), false)
+  assert.equal((await options.canUseTool('Write', {
+    file_path: join(temporaryDirectory, 'new-scoped.txt'), content: 'x',
+  })).behavior, 'deny')
+})
+
 test('expõe canUseTool como função', () => {
   const options = createOpenClaudeQueryOptions(temporaryDirectory, 'mission-execution', abortController, 'model-a')
 

@@ -34,6 +34,45 @@ test('valida uma Mission válida sem alterar a referência', () => {
   assert.strictEqual(validateMission(mission), mission)
 })
 
+test('Mission legacy omite scope e Mission scoped persiste shape canônico', () => {
+  const legacy = createMission([], {
+    title: 'Legacy', objective: 'Sem scope',
+  })
+  assert.equal(Object.hasOwn(legacy, 'changeScope'), false)
+
+  const inputScope = { allowedPaths: [], extra: true }
+  const scoped = createMission([], {
+    title: 'Scoped', objective: 'Sem mutações', changeScope: inputScope,
+  })
+  assert.deepEqual(scoped.changeScope, { allowedPaths: [] })
+  assert.notStrictEqual(scoped.changeScope.allowedPaths, inputScope.allowedPaths)
+  assert.strictEqual(validateMission(scoped), scoped)
+})
+
+test('propriedade changeScope explícita undefined é inválida', () => {
+  assert.throws(
+    () => validateMission(createValidMission({ changeScope: undefined })),
+    { message: 'Change Scope da Mission deve ser um objeto' },
+  )
+})
+
+test('lifecycle preserva Change Scope imutável', () => {
+  const scope = { allowedPaths: ['index.html'] }
+  const pending = createValidMission({ changeScope: scope })
+  const running = startMission([pending], pending.id)
+  const validation = submitMissionForValidation([running], running.id)
+  const correction = requestMissionCorrection([validation], validation.id)
+  const retried = retryMissionCorrection([correction], correction.id)
+  const failed = failMission([retried], retried.id)
+  const recovered = retryMission([failed], failed.id)
+  const completed = completeMission([
+    submitMissionForValidation([recovered], recovered.id),
+  ], recovered.id)
+  for (const mission of [running, validation, correction, retried, failed, recovered, completed]) {
+    assert.strictEqual(mission.changeScope, scope)
+  }
+})
+
 test('rejeita containers inválidos de Mission', () => {
   for (const mission of [null, [], 'mission', 123]) {
     assert.throws(

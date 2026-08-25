@@ -150,6 +150,52 @@ function validateCriterionEvidence(result, evidence) {
   }
 }
 
+function validateScopeEvidence(result, evidence) {
+  const fields = ['scopeType', 'violations']
+  const present = fields.filter(field => Object.hasOwn(evidence, field))
+
+  if (present.length === 0) {
+    if (result.id === 'mission-change-scope') {
+      throw new Error('metadata do Change Scope na evidence é incompleta')
+    }
+    return
+  }
+  if (present.length !== fields.length) {
+    throw new Error('metadata do Change Scope na evidence é incompleta')
+  }
+  if (
+    Object.hasOwn(evidence, 'criterionType')
+    || Object.hasOwn(evidence, 'path')
+    || Object.hasOwn(evidence, 'satisfied')
+  ) {
+    throw new Error('metadata de validator na evidence é ambígua')
+  }
+  if (result.id !== 'mission-change-scope' || evidence.scopeType !== 'allowed-paths') {
+    throw new Error('metadata do Change Scope na evidence é inválida')
+  }
+
+  validateExecutionChangeSet({
+    created: evidence.violations,
+    modified: [],
+    deleted: [],
+  })
+
+  const expectedLength = result.status === 'FAIL' ? 1 : 0
+  if (
+    (expectedLength === 1 && evidence.violations.length < 1)
+    || (expectedLength === 0 && evidence.violations.length !== 0)
+    || evidence.exitCode !== null
+    || evidence.signal !== null
+    || evidence.stdout !== ''
+    || evidence.stderr !== ''
+    || (result.status === 'ERROR'
+      ? typeof evidence.errorMessage !== 'string' || evidence.errorMessage.trim() === ''
+      : evidence.errorMessage !== null)
+  ) {
+    throw new Error('evidence do Change Scope é incoerente com o status')
+  }
+}
+
 function validateEvidence(result) {
   const { evidence } = result
   if (!isObject(evidence)) {
@@ -179,6 +225,7 @@ function validateEvidence(result) {
     throw new Error('errorMessage da evidence deve ser string ou null')
   }
 
+  validateScopeEvidence(result, evidence)
   validateCriterionEvidence(result, evidence)
 }
 

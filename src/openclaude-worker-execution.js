@@ -10,6 +10,7 @@ import {
   isRegisteredResponsibility,
   resolveResponsibilityDefinition,
 } from './responsibility-registry.js'
+import { validateMissionChangeScope } from './mission-change-scope.js'
 
 function errorMessage(error) {
   return error instanceof Error ? error.message : String(error)
@@ -56,6 +57,13 @@ export async function executeOpenClaudeQuery(input) {
 
   const validatedModel = model.trim()
 
+  if (Object.hasOwn(input, 'changeScope')) {
+    if (responsibility !== 'mission-execution') {
+      throw new Error('Change Scope OpenClaude só é suportado para mission-execution')
+    }
+    validateMissionChangeScope(input.changeScope)
+  }
+
   const guardrails = resolveOpenClaudeExecutionGuardrails(responsibility)
   const deadline = createOpenClaudeQueryDeadline(guardrails.queryTimeoutMs)
   let execution
@@ -67,6 +75,7 @@ export async function executeOpenClaudeQuery(input) {
       responsibility,
       deadline.abortController,
       validatedModel,
+      input.changeScope,
     )
     execution = query({
       prompt: validatedPrompt,

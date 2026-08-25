@@ -120,6 +120,27 @@ test('init-project mínimo retorna um único JSON e persiste stores', (t) => {
   assert.equal(result.stdout.trim().split(/\r?\n/).length, 1)
 })
 
+test('create-mission aceita Change Scope JSON estrito inclusive vazio', (t) => {
+  const root = createRoot(t)
+  initProject(root)
+  const { output } = runJsonCli([
+    'create-mission', '--project-root', root,
+    '--title', 'Scoped', '--objective', 'Alterar somente o autorizado',
+    '--change-scope', '{"allowedPaths":[]}',
+  ])
+  assert.deepEqual(output.changeScope, { allowedPaths: [] })
+  assert.deepEqual(readProjectStateStore(createProjectContext(root)).missions[0].changeScope, {
+    allowedPaths: [],
+  })
+
+  const invalid = runCli([
+    'create-mission', '--project-root', root,
+    '--title', 'Invalid', '--objective', 'Invalid', '--change-scope', '{',
+  ])
+  assert.equal(invalid.status, 1)
+  assert.match(invalid.stderr, /--change-scope deve conter JSON válido/)
+})
+
 test('init-project persiste --php absoluto', (t) => {
   const root = createRoot(t)
   const output = initProject(root, ['--php', process.execPath])

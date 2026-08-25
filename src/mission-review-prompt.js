@@ -1,4 +1,5 @@
 import { renderMissionAcceptanceCriteria } from './mission-acceptance-prompt.js'
+import { renderMissionChangeScope } from './mission-change-scope-prompt.js'
 
 function renderPaths(paths) {
   return paths.length === 0
@@ -47,6 +48,16 @@ ${renderedCriteria}
 Esses critérios são condições determinísticas definidas pelo JZL e podem ser usados como contexto da revisão.
 O reviewer não decide sua avaliação final; o Validator Engine mantém essa autoridade.`
   const changeSetSection = renderChangeSet(reviewContext.changeSet)
+  const renderedScope = renderMissionChangeScope(mission.changeScope)
+  const scopeSection = renderedScope === '' ? '' : `
+
+Change Scope autoritativo:
+
+${renderedScope}
+
+O Change Scope é a autorização determinística; o Change Set abaixo mostra o observado.
+O reviewer pode apontar inconsistências, mas não decide o validator.
+O Validator Engine continuará avaliando o scope deterministicamente.`
 
   return `Você está revisando uma Mission controlada pelo JZL.
 
@@ -60,7 +71,7 @@ Título:
 ${mission.title}
 
 Objetivo:
-${mission.objective}${acceptanceSection}
+${mission.objective}${acceptanceSection}${scopeSection}
 
 Padrões aplicáveis:
 ${standardsList}${changeSetSection}

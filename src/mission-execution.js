@@ -102,6 +102,9 @@ export async function executeProjectMission(context, missionId) {
       prompt,
       session,
       modelRoute,
+      ...(Object.hasOwn(runningMission, 'changeScope')
+        ? { changeScope: structuredClone(runningMission.changeScope) }
+        : {}),
     })
   } catch (error) {
     let changeSet = null

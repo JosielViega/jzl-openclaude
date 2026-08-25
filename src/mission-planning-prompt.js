@@ -1,4 +1,5 @@
 import { renderMissionAcceptanceCriteria } from './mission-acceptance-prompt.js'
+import { renderMissionChangeScope } from './mission-change-scope-prompt.js'
 
 export function buildMissionPlanningPrompt(planningContext) {
   const { mission, standards } = planningContext
@@ -15,6 +16,14 @@ ${renderedCriteria}
 
 Considere esses critérios no plano, sem alterá-los ou reinterpretá-los.
 O campo validation[] produzido pelo planejamento é consultivo e não cria novos Acceptance Criteria.`
+  const renderedScope = renderMissionChangeScope(mission.changeScope)
+  const scopeSection = renderedScope === '' ? '' : `
+
+${renderedScope}
+
+Planeje respeitando esse scope e não proponha alterações executáveis fora dele.
+O Planner não pode alterar nem ampliar o Change Scope, e paths do plano não modificam essa autorização.
+O campo validation[] continua consultivo.`
 
   return `Você está planejando uma Mission controlada pelo JZL.
 
@@ -28,7 +37,7 @@ Título:
 ${mission.title}
 
 Objetivo:
-${mission.objective}${acceptanceSection}
+${mission.objective}${acceptanceSection}${scopeSection}
 
 Dependências:
 ${dependencies}

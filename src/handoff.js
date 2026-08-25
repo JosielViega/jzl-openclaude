@@ -1,6 +1,7 @@
 import { validateMissionReviewResult } from './mission-review-result.js'
 import { validateMissionPlanningResult } from './mission-planning-result.js'
 import { isMissionAcceptanceCriterionType } from './mission-acceptance-criterion.js'
+import { validateExecutionChangeSet } from './execution-change-set.js'
 
 const missionIdPattern = /^mission-\d{4,}$/
 const eventIdPattern = /^event-\d{6,}$/
@@ -41,7 +42,42 @@ function validateEvidence(validator) {
   const fields = ['criterionType', 'path', 'satisfied']
   const present = fields.filter((field) => Object.hasOwn(evidence, field))
 
+  const scopeFields = ['scopeType', 'violations']
+  const scopePresent = scopeFields.filter(field => Object.hasOwn(evidence, field))
+
+  if (present.length > 0 && scopePresent.length > 0) {
+    throw new Error('metadata de validator na evidence é ambígua')
+  }
+
+  if (scopePresent.length > 0) {
+    if (
+      scopePresent.length !== scopeFields.length
+      || validator.id !== 'mission-change-scope'
+      || validator.status !== 'FAIL'
+      || evidence.scopeType !== 'allowed-paths'
+      || evidence.exitCode !== null
+      || evidence.signal !== null
+      || evidence.stdout !== ''
+      || evidence.stderr !== ''
+      || evidence.errorMessage !== null
+      || !Array.isArray(evidence.violations)
+      || evidence.violations.length === 0
+    ) {
+      throw new Error('evidence do Change Scope do handoff é inválida')
+    }
+
+    validateExecutionChangeSet({
+      created: evidence.violations,
+      modified: [],
+      deleted: [],
+    })
+    return
+  }
+
   if (present.length === 0) {
+    if (validator.id === 'mission-change-scope') {
+      throw new Error('metadata do Change Scope no handoff é incompleta')
+    }
     return
   }
 

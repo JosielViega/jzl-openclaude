@@ -2,6 +2,7 @@ import {
   isRegisteredResponsibility,
   resolveResponsibilityDefinition,
 } from './responsibility-registry.js'
+import { validateMissionChangeScope } from './mission-change-scope.js'
 
 export function parseOpenClaudeWorkerRequest(input) {
   if (input.trim() === '') {
@@ -74,10 +75,20 @@ export function parseOpenClaudeWorkerRequest(input) {
     throw new Error('model não pode ser vazio')
   }
 
+  if (Object.hasOwn(request, 'changeScope')) {
+    if (request.responsibility !== 'mission-execution') {
+      throw new Error('changeScope do worker só é suportado para mission-execution')
+    }
+    validateMissionChangeScope(request.changeScope)
+  }
+
   return {
     prompt: validatedPrompt,
     sessionMode: request.sessionMode,
     responsibility: request.responsibility,
     model: validatedModel,
+    ...(Object.hasOwn(request, 'changeScope')
+      ? { changeScope: structuredClone(request.changeScope) }
+      : {}),
   }
 }

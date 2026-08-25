@@ -70,6 +70,10 @@ OpenClaude `SUCCESS` técnico não equivale a Mission concluída. Acceptance Cri
 
 Observa deterministicamente o efeito de cada tentativa de execução no filesystem. Snapshots before/after e seus SHA-256 internos não são persistidos; o Event Log recebe somente paths `created`, `modified` e `deleted`, excluindo `.jzl`, `.git` e `.openclaude` e sem percorrer symlinks ou junctions. O Change Set não determina `PASS` ou `FAIL`: um conjunto vazio não significa falha, e Acceptance Criteria e Validators continuam sendo a autoridade. Erros técnicos podem registrar um Change Set quando a observação final for possível, e Mission Review recebe somente o Change Set da última execução `SUCCESS` como contexto, sem transcript.
 
+### Mission Change Scope
+
+Autoriza deterministicamente os paths exatos que uma Mission pode alterar. É opcional, definido pelo Host/JZL e imutável no v1: sua ausência preserva o comportamento legado, enquanto `allowedPaths: []` proíbe qualquer mutação. A Tool Policy aplica o scope ao target canônico real de `Write` e `Edit`, sem restringir leitura, e o Change Set verifica posteriormente o efeito observado por meio de um Scope Validator. Esse validator roda antes de Acceptance Criteria e validators configurados; `FAIL` solicita correção, `ERROR` mantém a Mission em validação e um Change Set vazio pode resultar em `PASS`. O scope restringe autoridade, mas não comprova que o objetivo foi cumprido, e o Planner não pode criá-lo nem ampliá-lo.
+
 ### Handoff Processor
 
 Valida e processa Handoffs estruturados entre responsabilidades. Transfere resultados e informações resumíveis sem depender do compartilhamento automático de transcripts.

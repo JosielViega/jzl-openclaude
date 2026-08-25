@@ -1,10 +1,28 @@
 import { renderMissionAcceptanceCriteria } from './mission-acceptance-prompt.js'
+import { renderMissionChangeScope } from './mission-change-scope-prompt.js'
 
 function renderDiagnosticValue(value) {
   return value === null ? 'null' : String(value)
 }
 
 function renderFailedValidator(validator) {
+  if (validator.evidence.scopeType !== undefined) {
+    const violations = validator.evidence.violations
+      .map(path => `- ${path}`)
+      .join('\n')
+
+    return `Change Scope Validator:
+${validator.id}
+
+Tipo:
+${validator.evidence.scopeType}
+
+Paths alterados fora do Change Scope:
+${violations}
+
+Esses paths foram observados deterministicamente no Change Set da execução anterior.`
+  }
+
   if (validator.evidence.criterionType !== undefined) {
     return `Acceptance Criterion:
 ${validator.id}
@@ -245,6 +263,16 @@ Os critérios acima foram definidos deterministicamente pelo JZL.
 Implemente a Mission de modo que todos sejam satisfeitos.
 Não altere, remova ou reinterprete esses critérios.
 O Validator Engine verificará os critérios após a execução.`
+  const renderedScope = renderMissionChangeScope(mission.changeScope)
+  const scopeSection = renderedScope === '' ? '' : `
+
+${renderedScope}
+
+O Change Scope foi definido deterministicamente pelo JZL.
+Não crie, modifique ou remova paths fora dele.
+Os paths são exatos. Ler outros arquivos continua permitido quando necessário.
+Mission, Acceptance Criteria, Change Scope e Standards têm precedência sobre sugestões do Plan Handoff.
+O JZL verificará deterministicamente as mudanças após a execução.`
 
   return `Você está executando uma Mission controlada pelo JZL.
 
@@ -255,7 +283,7 @@ Título:
 ${mission.title}
 
 Objetivo:
-${mission.objective}${acceptanceSection}
+${mission.objective}${acceptanceSection}${scopeSection}
 
 Padrões aplicáveis:
 ${standardsList}${handoffSection}

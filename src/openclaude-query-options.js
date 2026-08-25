@@ -6,6 +6,7 @@ export function createOpenClaudeQueryOptions(
   responsibility,
   abortController,
   model,
+  changeScope,
 ) {
   const validatedProjectRoot = validateProjectRoot(projectRoot)
 
@@ -19,7 +20,11 @@ export function createOpenClaudeQueryOptions(
 
   return {
     cwd: validatedProjectRoot,
-    canUseTool: createOpenClaudeToolPolicy(validatedProjectRoot, responsibility),
+    canUseTool: createOpenClaudeToolPolicy(
+      validatedProjectRoot,
+      responsibility,
+      changeScope,
+    ),
     abortController,
     model: model.trim(),
   }

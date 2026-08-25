@@ -2,6 +2,10 @@ import {
   createMissionAcceptanceCriteria,
   validateMissionAcceptanceCriteria,
 } from './mission-acceptance-criterion.js'
+import {
+  createMissionChangeScope,
+  validateMissionChangeScope,
+} from './mission-change-scope.js'
 
 const missionIdPattern = /^mission-\d{4,}$/
 
@@ -151,6 +155,10 @@ export function validateMission(mission) {
     validateMissionAcceptanceCriteria(mission.acceptanceCriteria)
   }
 
+  if (Object.hasOwn(mission, 'changeScope')) {
+    validateMissionChangeScope(mission.changeScope)
+  }
+
   return mission
 }
 
@@ -180,6 +188,7 @@ export function createMission(existingMissions, input) {
   const acceptanceCriteria = createMissionAcceptanceCriteria(
     input.acceptanceCriteria,
   )
+  const changeScope = createMissionChangeScope(input.changeScope)
 
   for (const dependencyId of dependencies) {
     if (!missionsById.has(dependencyId)) {
@@ -208,6 +217,7 @@ export function createMission(existingMissions, input) {
     status: 'pending',
     dependencies: [...dependencies],
     acceptanceCriteria,
+    ...(changeScope === undefined ? {} : { changeScope }),
   }
 }
 

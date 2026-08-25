@@ -19,6 +19,9 @@ async function main() {
     sessionMode: request.sessionMode,
     responsibility: request.responsibility,
     model: request.model,
+    ...(Object.hasOwn(request, 'changeScope')
+      ? { changeScope: request.changeScope }
+      : {}),
   })
 
   console.log(JSON.stringify(execution))

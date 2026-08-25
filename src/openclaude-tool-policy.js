@@ -11,6 +11,10 @@ import {
   isRegisteredResponsibility,
   resolveResponsibilityDefinition,
 } from './responsibility-registry.js'
+import {
+  isMissionChangeScopePathAllowed,
+  validateMissionChangeScope,
+} from './mission-change-scope.js'
 
 const allowedToolsByAccess = new Map([
   ['read-write', new Set(['Read', 'Glob', 'Grep', 'Write', 'Edit'])],
@@ -153,7 +157,7 @@ function resolveSearchBase(context, path, requireDirectory) {
   return targetPath
 }
 
-export function createOpenClaudeToolPolicy(projectRoot, responsibility) {
+export function createOpenClaudeToolPolicy(projectRoot, responsibility, changeScope) {
   if (!isRegisteredResponsibility(responsibility)) {
     throw new Error('responsabilidade OpenClaude não é suportada')
   }
@@ -163,6 +167,13 @@ export function createOpenClaudeToolPolicy(projectRoot, responsibility) {
 
   if (allowedTools === undefined) {
     throw new Error('perfil de ferramentas OpenClaude não é suportado')
+  }
+
+  if (changeScope !== undefined) {
+    if (responsibility !== 'mission-execution') {
+      throw new Error('Change Scope OpenClaude só é suportado para mission-execution')
+    }
+    validateMissionChangeScope(changeScope)
   }
 
   const context = createProjectContext(projectRoot)
@@ -202,6 +213,16 @@ export function createOpenClaudeToolPolicy(projectRoot, responsibility) {
           throw new Error('path protegido')
         }
 
+        if (
+          changeScope !== undefined
+          && !isMissionChangeScopePathAllowed(
+            changeScope,
+            toProjectPath(context, targetPath).replaceAll('\\', '/'),
+          )
+        ) {
+          return deny('O JZL não autorizou alteração fora do Change Scope da Mission')
+        }
+
         return { behavior: 'allow' }
       }
 
@@ -223,6 +244,16 @@ export function createOpenClaudeToolPolicy(projectRoot, responsibility) {
         }
 
         assertWritableFileHasSingleLink(targetPath)
+
+        if (
+          changeScope !== undefined
+          && !isMissionChangeScopePathAllowed(
+            changeScope,
+            toProjectPath(context, targetPath).replaceAll('\\', '/'),
+          )
+        ) {
+          return deny('O JZL não autorizou alteração fora do Change Scope da Mission')
+        }
 
         return { behavior: 'allow' }
       }

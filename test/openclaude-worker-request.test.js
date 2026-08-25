@@ -21,6 +21,23 @@ test('normaliza uma solicitação válida', () => {
   })
 })
 
+test('preserva Change Scope canônico somente em mission-execution', () => {
+  const scope = { allowedPaths: ['index.html'], extra: true }
+  const request = parseOpenClaudeWorkerRequest(JSON.stringify({
+    prompt: 'executar', sessionMode: 'fresh', responsibility: 'mission-execution',
+    model: 'model-a', changeScope: scope,
+  }))
+  assert.deepEqual(request.changeScope, scope)
+  assert.notStrictEqual(request.changeScope, scope)
+
+  for (const responsibility of ['mission-review', 'mission-planning']) {
+    assert.throws(() => parseOpenClaudeWorkerRequest(JSON.stringify({
+      prompt: 'x', sessionMode: 'fresh', responsibility,
+      model: 'model-a', changeScope: { allowedPaths: [] },
+    })), /só é suportado para mission-execution/)
+  }
+})
+
 const invalidRequestCases = [
   {
     name: 'rejeita input vazio',

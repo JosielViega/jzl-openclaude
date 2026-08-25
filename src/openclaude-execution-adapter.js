@@ -12,6 +12,7 @@ import { waitForOpenClaudeWorkerClose } from './openclaude-worker-watchdog.js'
 import { validateProjectRoot } from './project-root.js'
 import { validateMissionSession } from './session-manager.js'
 import { validateProjectModelRoute } from './model-router.js'
+import { validateMissionChangeScope } from './mission-change-scope.js'
 
 export async function executeOpenClaudeText(input) {
   if (input === null || typeof input !== 'object' || Array.isArray(input)) {
@@ -35,6 +36,13 @@ export async function executeOpenClaudeText(input) {
 
   if (modelRoute.responsibility !== session.responsibility) {
     throw new Error('rota de modelo não corresponde à responsabilidade da sessão')
+  }
+
+  if (Object.hasOwn(input, 'changeScope')) {
+    if (session.responsibility !== 'mission-execution') {
+      throw new Error('Change Scope OpenClaude só é suportado para mission-execution')
+    }
+    validateMissionChangeScope(input.changeScope)
   }
 
   const validatedProjectRoot = validateProjectRoot(projectRoot)
@@ -70,6 +78,9 @@ export async function executeOpenClaudeText(input) {
     sessionMode: session.mode,
     responsibility: session.responsibility,
     model: modelRoute.model,
+    ...(Object.hasOwn(input, 'changeScope')
+      ? { changeScope: structuredClone(input.changeScope) }
+      : {}),
   }))
 
   const { code, signal, timedOut } = await workerClose

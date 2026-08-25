@@ -7,6 +7,10 @@ import {
   isMissionAcceptanceCriterionType,
   validateMissionAcceptanceCriterion,
 } from './mission-acceptance-criterion.js'
+import {
+  runMissionChangeScopeValidator,
+  validateMissionChangeScopeValidator,
+} from './mission-change-scope-validator.js'
 
 function validateValidatorDefinition(validator) {
   if (validator === null || typeof validator !== 'object' || Array.isArray(validator)) {
@@ -34,6 +38,11 @@ function validateValidatorDefinition(validator) {
   }
 
   if (validator.type !== 'command') {
+    if (validator.type === 'mission-change-scope') {
+      validateMissionChangeScopeValidator(validator)
+      return
+    }
+
     if (!isMissionAcceptanceCriterionType(validator.type)) {
       throw new Error('type do validator não é suportado')
     }
@@ -170,6 +179,8 @@ export function runProjectValidators(context, validators) {
   const results = validators.map((validator) => (
     validator.type === 'command'
       ? runValidator(projectRoot, validator)
+      : validator.type === 'mission-change-scope'
+        ? runMissionChangeScopeValidator(validator)
       : runMissionAcceptanceCriterion(context, validator)
   ))
   let status = 'PASS'

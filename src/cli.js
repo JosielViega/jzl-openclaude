@@ -38,6 +38,16 @@ function parseAcceptanceCriteria(values) {
   })
 }
 
+function parseChangeScope(value) {
+  if (value === undefined) return undefined
+
+  try {
+    return JSON.parse(value)
+  } catch {
+    throw new Error('--change-scope deve conter JSON válido')
+  }
+}
+
 const [command, ...argumentsList] = process.argv.slice(2)
 
 try {
@@ -71,6 +81,7 @@ try {
       '--objective': { required: true },
       '--depends-on': { repeatable: true },
       '--acceptance': { repeatable: true },
+      '--change-scope': {},
     })
 
     printJson(createProjectMission(createContext(options), {
@@ -78,6 +89,7 @@ try {
       objective: options['--objective'],
       dependencies: options['--depends-on'],
       acceptanceCriteria: parseAcceptanceCriteria(options['--acceptance']),
+      changeScope: parseChangeScope(options['--change-scope']),
     }))
   } else if (command === 'list-ready') {
     const options = parseCliOptions(argumentsList, projectRootOption)

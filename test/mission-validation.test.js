@@ -14,7 +14,10 @@ import { test } from 'node:test'
 import { createProjectContext } from '../src/project-context.js'
 import { initializeProjectConfigStore } from '../src/project-config-store.js'
 import { readProjectEventStore } from '../src/project-event-store.js'
-import { listReadyProjectMissions } from '../src/mission-engine.js'
+import {
+  listReadyProjectMissions,
+  retryProjectMissionCorrection,
+} from '../src/mission-engine.js'
 import {
   validateConfiguredProjectMission,
   validateProjectMission,
@@ -24,6 +27,10 @@ import {
   readProjectStateStore,
   writeProjectStateStore,
 } from '../src/project-state-store.js'
+import { recordMissionExecutionSuccess } from '../src/execution-history.js'
+import { resolveMissionCorrectionHandoff } from '../src/handoff-processor.js'
+import { buildMissionExecutionContext } from '../src/context-builder.js'
+import { buildMissionExecutionPrompt } from '../src/mission-execution-prompt.js'
 
 const evidenceFields = [
   'validation',
@@ -98,6 +105,95 @@ function assertEvidenceNotPersisted(state) {
     assert.equal(Object.hasOwn(state, field), false)
   }
 }
+
+function recordScopedExecution(context, missionId, changeSet) {
+  recordMissionExecutionSuccess(context, {
+    missionId,
+    fromStatus: 'pending',
+    execution: {
+      sessionId: 'session-scope', result: 'ok', model: 'model-a', changeSet,
+    },
+  })
+}
+
+test('Scope Validator roda primeiro e FAIL envia Mission para correction', async (t) => {
+  const { context } = createTemporaryContext(t)
+  const mission = createMission('mission-0001', 'validation', {
+    changeScope: { allowedPaths: ['index.html'] },
+  })
+  initializeMissions(context, [mission])
+  recordScopedExecution(context, mission.id, {
+    created: [], modified: ['config.php', 'index.html'], deleted: [],
+  })
+
+  const result = await validateProjectMission(context, mission.id, [])
+  assert.equal(result.mission.status, 'correction')
+  assert.equal(result.validation.status, 'FAIL')
+  assert.equal(result.validation.results[0].id, 'mission-change-scope')
+  assert.deepEqual(result.validation.results[0].evidence.violations, ['config.php'])
+
+  const handoff = resolveMissionCorrectionHandoff(context, mission.id)
+  assert.deepEqual(handoff.payload.failedValidators[0].evidence.violations, ['config.php'])
+  const executionContext = buildMissionExecutionContext(context, {
+    mission: retryProjectMissionCorrection(context, mission.id),
+    standards: { id: 'test', instructions: ['Preserve o projeto.'] },
+    handoff,
+  })
+  const prompt = buildMissionExecutionPrompt(executionContext)
+  assert.match(prompt, /Change Scope determinístico definido pelo JZL/)
+  assert.match(prompt, /index\.html/)
+  assert.match(prompt, /config\.php/)
+})
+
+test('Scope Validator PASS conclui com Change Set permitido ou vazio', async (t) => {
+  const { context } = createTemporaryContext(t)
+  const mission = createMission('mission-0001', 'validation', {
+    changeScope: { allowedPaths: ['index.html'] },
+  })
+  initializeMissions(context, [mission])
+  recordScopedExecution(context, mission.id, {
+    created: [], modified: ['index.html'], deleted: [],
+  })
+  const result = await validateProjectMission(context, mission.id, [])
+  assert.equal(result.validation.status, 'PASS')
+  assert.equal(result.mission.status, 'completed')
+})
+
+test('scope sem Change Set produz ERROR e mantém Mission validation', async (t) => {
+  const { context } = createTemporaryContext(t)
+  const mission = createMission('mission-0001', 'validation', {
+    changeScope: { allowedPaths: [] },
+  })
+  initializeMissions(context, [mission])
+  const result = await validateProjectMission(context, mission.id, [])
+  assert.equal(result.validation.status, 'ERROR')
+  assert.equal(result.mission.status, 'validation')
+  assert.equal(result.validation.results[0].status, 'ERROR')
+})
+
+test('ordena Scope, Acceptance Criteria e validators configurados', async (t) => {
+  const { context, projectRoot } = createTemporaryContext(t)
+  writeFileSync(join(projectRoot, 'index.html'), '<h1>ok</h1>')
+  const mission = createMission('mission-0001', 'validation', {
+    changeScope: { allowedPaths: ['index.html'] },
+    acceptanceCriteria: [{
+      id: 'criterion-0001', type: 'file-exists', path: 'index.html',
+    }],
+  })
+  initializeMissions(context, [mission])
+  recordScopedExecution(context, mission.id, {
+    created: [], modified: [], deleted: [],
+  })
+
+  const result = await validateProjectMission(context, mission.id, [
+    createValidator('configured'),
+  ])
+  assert.deepEqual(
+    result.validation.results.map(({ id }) => id),
+    ['mission-change-scope', 'criterion-0001', 'configured'],
+  )
+  assert.equal(result.validation.status, 'PASS')
+})
 
 function initializeConfiguredValidation(
   context,

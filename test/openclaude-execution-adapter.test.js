@@ -87,6 +87,22 @@ test('aceita descriptor mission-review e valida projectRoot antes do worker', as
   }), { message: 'projectRoot deve ser um caminho absoluto' })
 })
 
+test('Change Scope é aceito somente para sessão mission-execution', async () => {
+  await assert.rejects(executeOpenClaudeText({
+    projectRoot: 'relative/path', prompt: 'executar',
+    session: { responsibility: 'mission-execution', mode: 'fresh', missionId: 'mission-0001' },
+    modelRoute: { responsibility: 'mission-execution', model: 'model-a' },
+    changeScope: { allowedPaths: [] },
+  }), { message: 'projectRoot deve ser um caminho absoluto' })
+
+  await assert.rejects(executeOpenClaudeText({
+    projectRoot: 'relative/path', prompt: 'revisar',
+    session: { responsibility: 'mission-review', mode: 'fresh', missionId: 'mission-0001' },
+    modelRoute: { responsibility: 'mission-review', model: 'model-a' },
+    changeScope: { allowedPaths: [] },
+  }), { message: 'Change Scope OpenClaude só é suportado para mission-execution' })
+})
+
 test('aceita descriptor mission-planning e rota correspondente antes do worker', async () => {
   await assert.rejects(executeOpenClaudeText({
     projectRoot: 'relative/path', prompt: 'planejar',

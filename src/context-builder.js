@@ -61,6 +61,14 @@ function cloneFailedValidator(result, redactProjectRoot) {
         path: truncateText(redactProjectRoot(result.evidence.path), 500),
         satisfied: result.evidence.satisfied,
       }
+  const scopeEvidence = result.evidence.scopeType === undefined
+    ? {}
+    : {
+        scopeType: result.evidence.scopeType,
+        violations: result.evidence.violations.map(
+          path => truncateText(redactProjectRoot(path), 500),
+        ),
+      }
 
   return {
     id: result.id,
@@ -74,6 +82,7 @@ function cloneFailedValidator(result, redactProjectRoot) {
         ? sanitizeDiagnosticText(result.evidence.errorMessage, redactProjectRoot)
         : null,
       ...criterionEvidence,
+      ...scopeEvidence,
     },
   }
 }

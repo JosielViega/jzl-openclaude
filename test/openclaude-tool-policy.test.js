@@ -55,6 +55,7 @@ before(() => {
   const linkType = process.platform === 'win32' ? 'junction' : 'dir'
   symlinkSync(externalRoot, join(projectRoot, 'external-link'), linkType)
   symlinkSync(join(projectRoot, '.jzl'), join(projectRoot, 'state-alias'), linkType)
+  symlinkSync(join(projectRoot, 'src'), join(projectRoot, 'src-alias'), linkType)
 
   initialRootEntries = readdirSync(projectRoot).sort()
   canUseTool = createOpenClaudeToolPolicy(projectRoot, 'mission-execution')
@@ -138,6 +139,82 @@ test('autoriza Edit de arquivo interno sem alterar conteúdo', async () => {
     { behavior: 'allow' },
   )
   assert.equal(readFileSync(join(projectRoot, 'src', 'inside.txt'), 'utf8'), 'inside')
+})
+
+test('Change Scope restringe Write e Edit sem restringir Read, Glob ou Grep', async () => {
+  const scope = { allowedPaths: ['src/inside.txt', 'src/scoped-new.txt'] }
+  const before = structuredClone(scope)
+  const policy = createOpenClaudeToolPolicy(projectRoot, 'mission-execution', scope)
+
+  assert.equal((await policy('Write', {
+    file_path: join(projectRoot, 'src', 'scoped-new.txt'), content: 'new',
+  })).behavior, 'allow')
+  assert.equal((await policy('Edit', {
+    file_path: join(projectRoot, 'src', 'inside.txt'), old_string: 'a', new_string: 'b',
+  })).behavior, 'allow')
+  assert.equal((await policy('Write', {
+    file_path: join(projectRoot, 'unlisted.txt'), content: 'no',
+  })).behavior, 'deny')
+  assert.equal((await policy('Read', {
+    file_path: join(projectRoot, 'AGENTS.md'),
+  })).behavior, 'allow')
+  assert.equal((await policy('Glob', { pattern: '**/*.txt', path: projectRoot })).behavior, 'allow')
+  assert.equal((await policy('Grep', { pattern: 'inside', path: projectRoot })).behavior, 'allow')
+  assert.deepEqual(scope, before)
+})
+
+test('Change Scope vazio bloqueia mutações e não amplia responsabilidades', async () => {
+  const policy = createOpenClaudeToolPolicy(
+    projectRoot, 'mission-execution', { allowedPaths: [] },
+  )
+  assert.equal((await policy('Write', {
+    file_path: join(projectRoot, 'src', 'new-empty.txt'), content: 'no',
+  })).behavior, 'deny')
+  assert.equal((await policy('Edit', {
+    file_path: join(projectRoot, 'src', 'inside.txt'),
+  })).behavior, 'deny')
+  assert.throws(
+    () => createOpenClaudeToolPolicy(projectRoot, 'mission-review', { allowedPaths: [] }),
+    /só é suportado para mission-execution/,
+  )
+  assert.throws(
+    () => createOpenClaudeToolPolicy(projectRoot, 'mission-planning', { allowedPaths: [] }),
+    /só é suportado para mission-execution/,
+  )
+})
+
+test('segurança protegida e hard-link precedem Change Scope artificial', async () => {
+  assert.throws(
+    () => createOpenClaudeToolPolicy(projectRoot, 'mission-execution', {
+      allowedPaths: ['.jzl/state.json'],
+    }),
+    /protegido/,
+  )
+  const policy = createOpenClaudeToolPolicy(projectRoot, 'mission-execution', {
+    allowedPaths: ['state-hardlink.json'],
+  })
+  assert.equal((await policy('Write', {
+    file_path: join(projectRoot, 'state-hardlink.json'), content: 'no',
+  })).behavior, 'deny')
+})
+
+test('Change Scope compara o target canônico real de aliases internos', async () => {
+  const realPolicy = createOpenClaudeToolPolicy(projectRoot, 'mission-execution', {
+    allowedPaths: ['src/inside.txt', 'src/created-through-alias.txt'],
+  })
+  assert.equal((await realPolicy('Edit', {
+    file_path: join(projectRoot, 'src-alias', 'inside.txt'),
+  })).behavior, 'allow')
+  assert.equal((await realPolicy('Write', {
+    file_path: join(projectRoot, 'src-alias', 'created-through-alias.txt'), content: 'x',
+  })).behavior, 'allow')
+
+  const aliasPolicy = createOpenClaudeToolPolicy(projectRoot, 'mission-execution', {
+    allowedPaths: ['src-alias/inside.txt'],
+  })
+  assert.equal((await aliasPolicy('Edit', {
+    file_path: join(projectRoot, 'src-alias', 'inside.txt'),
+  })).behavior, 'deny')
 })
 
 test('autoriza Glob com base padrão e interna', async () => {
