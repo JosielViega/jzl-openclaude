@@ -2,9 +2,14 @@ import { listProjectHistory } from './execution-history.js'
 import { validateHandoff } from './handoff.js'
 
 const unavailableMessage = 'handoff de correção da Mission não está disponível'
+const unavailablePlanMessage = 'handoff de plano da Mission não está disponível'
 
 function unavailable() {
   throw new Error(unavailableMessage)
+}
+
+function unavailablePlan() {
+  throw new Error(unavailablePlanMessage)
 }
 
 function buildValidationHandoff(event, missionId) {
@@ -136,4 +141,74 @@ export function resolveMissionCorrectionHandoff(context, missionId) {
   }
 
   unavailable()
+}
+
+export function resolveMissionPlanExecutionHandoff(context, missionId) {
+  let events
+
+  try {
+    events = listProjectHistory(context, missionId)
+  } catch (error) {
+    if (
+      error instanceof Error
+      && error.message === 'arquivo de histórico do projeto não existe'
+    ) {
+      return null
+    }
+
+    throw error
+  }
+
+  const approvalIndex = events.findLastIndex(
+    ({ type }) => type === 'mission.plan.approved',
+  )
+
+  if (approvalIndex === -1) {
+    return null
+  }
+
+  const approvalEvent = events[approvalIndex]
+  const planIndex = events.findIndex(
+    ({ id }) => id === approvalEvent.data.planEventId,
+  )
+
+  if (planIndex === -1 || planIndex >= approvalIndex) {
+    unavailablePlan()
+  }
+
+  const planEvent = events[planIndex]
+
+  if (planEvent.type !== 'mission.plan.finished') {
+    unavailablePlan()
+  }
+
+  if (events.slice(planIndex + 1, approvalIndex).some(
+    ({ type }) => type === 'mission.plan.finished',
+  )) {
+    unavailablePlan()
+  }
+
+  if (events.slice(approvalIndex + 1).some(({ type }) => (
+    type === 'mission.plan.finished' || type === 'mission.execution.finished'
+  ))) {
+    unavailablePlan()
+  }
+
+  return validateHandoff({
+    schemaVersion: 1,
+    type: 'mission-plan-execution',
+    missionId,
+    source: {
+      responsibility: 'mission-planning',
+      eventId: planEvent.id,
+    },
+    authorization: { eventId: approvalEvent.id },
+    target: { responsibility: 'mission-execution' },
+    payload: {
+      summary: planEvent.data.summary,
+      steps: structuredClone(planEvent.data.steps),
+      risks: structuredClone(planEvent.data.risks),
+      validation: structuredClone(planEvent.data.validation),
+    },
+  })
 }

@@ -49,6 +49,23 @@ function validReviewHandoff(overrides = {}) {
   }
 }
 
+function validPlanHandoff(overrides = {}) {
+  return {
+    schemaVersion: 1,
+    type: 'mission-plan-execution',
+    missionId: 'mission-0001',
+    source: { responsibility: 'mission-planning', eventId: 'event-000123' },
+    authorization: { eventId: 'event-000124' },
+    target: { responsibility: 'mission-execution' },
+    payload: {
+      summary: 'Plano aprovado',
+      steps: [{ title: 'Passo', detail: 'Detalhe', paths: ['index.html'] }],
+      risks: [], validation: [],
+    },
+    ...overrides,
+  }
+}
+
 test('valida Handoff canônico e retorna a mesma referência', () => {
   const handoff = validHandoff()
 
@@ -62,6 +79,32 @@ test('valida Handoff de review correction sem mutar payload', () => {
   assert.deepEqual(handoff, before)
   assert.equal(Object.hasOwn(handoff, 'sessionId'), false)
 })
+
+test('valida Plan Handoff v1 pela mesma referência sem identidade probabilística', () => {
+  const handoff = validPlanHandoff({ extra: true })
+  handoff.payload.extra = true
+  const before = structuredClone(handoff)
+  assert.strictEqual(validateHandoff(handoff), handoff)
+  assert.deepEqual(handoff, before)
+  assert.equal(Object.hasOwn(handoff, 'sessionId'), false)
+  assert.equal(Object.hasOwn(handoff, 'model'), false)
+})
+
+for (const [name, override, message] of [
+  ['source', { source: { responsibility: 'mission-review', eventId: 'event-000123' } }, 'responsabilidade de origem do handoff não é suportada'],
+  ['authorization ausente', { authorization: undefined }, 'authorization do handoff deve ser um objeto'],
+  ['authorization inválida', { authorization: { eventId: 'event-1' } }, 'eventId de autorização do handoff é inválido'],
+  ['eventos iguais', { authorization: { eventId: 'event-000123' } }, 'eventos de origem e autorização do handoff devem ser diferentes'],
+  ['target', { target: { responsibility: 'mission-review' } }, 'responsabilidade de destino do handoff não é suportada'],
+  ['summary', { payload: { ...validPlanHandoff().payload, summary: '' } }, 'summary do planejamento é inválido'],
+  ['steps', { payload: { ...validPlanHandoff().payload, steps: [] } }, 'steps do planejamento deve ser um array não vazio'],
+  ['risks', { payload: { ...validPlanHandoff().payload, risks: null } }, 'risks do planejamento deve ser um array'],
+  ['validation', { payload: { ...validPlanHandoff().payload, validation: null } }, 'validation do planejamento deve ser um array'],
+]) {
+  test(`rejeita Plan Handoff com ${name}`, () => {
+    assert.throws(() => validateHandoff(validPlanHandoff(override)), { message })
+  })
+}
 
 for (const [name, override, message] of [
   ['source', { source: { responsibility: 'mission-validation', eventId: 'event-000123' } }, 'responsabilidade de origem do handoff não é suportada'],

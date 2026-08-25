@@ -11,7 +11,10 @@ import {
   submitProjectMissionForValidation,
 } from './mission-engine.js'
 import { buildMissionExecutionPrompt } from './mission-execution-prompt.js'
-import { resolveMissionCorrectionHandoff } from './handoff-processor.js'
+import {
+  resolveMissionCorrectionHandoff,
+  resolveMissionPlanExecutionHandoff,
+} from './handoff-processor.js'
 import { resolveProjectModelRoute } from './model-router.js'
 import { createMissionExecutionSession } from './session-manager.js'
 import { resolveProjectStandards } from './standards-resolver.js'
@@ -62,9 +65,13 @@ function persistTechnicalFailure(
 export async function executeProjectMission(context, missionId) {
   const initialMission = getProjectMission(context, missionId)
   const fromStatus = initialMission.status
-  const handoff = fromStatus === 'correction'
-    ? resolveMissionCorrectionHandoff(context, missionId)
-    : null
+  let handoff = null
+
+  if (fromStatus === 'correction') {
+    handoff = resolveMissionCorrectionHandoff(context, missionId)
+  } else if (fromStatus === 'pending') {
+    handoff = resolveMissionPlanExecutionHandoff(context, missionId)
+  }
   const runningMission = prepareProjectMissionExecution(context, missionId)
   let prompt
   let execution

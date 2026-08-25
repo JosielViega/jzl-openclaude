@@ -5,7 +5,10 @@ import { join } from 'node:path'
 import { test } from 'node:test'
 
 import { createProjectContext } from '../src/project-context.js'
-import { resolveMissionCorrectionHandoff } from '../src/handoff-processor.js'
+import {
+  resolveMissionCorrectionHandoff,
+  resolveMissionPlanExecutionHandoff,
+} from '../src/handoff-processor.js'
 import {
   appendProjectEvent,
   initializeProjectEventStore,
@@ -73,6 +76,24 @@ function appendAuthorization(context, reviewEventId) {
   })
 }
 
+function appendPlan(context, summary = 'Plano A') {
+  return appendProjectEvent(context, {
+    type: 'mission.plan.finished', missionId: 'mission-0001',
+    data: {
+      sessionId: `session-${summary}`, model: 'planner-model', summary,
+      steps: [{ title: 'Passo', detail: 'Detalhe', paths: ['index.html'] }],
+      risks: [], validation: [],
+    },
+  })
+}
+
+function appendPlanApproval(context, planEventId) {
+  return appendProjectEvent(context, {
+    type: 'mission.plan.approved', missionId: 'mission-0001',
+    data: { planEventId },
+  })
+}
+
 test('resolve o último FAIL compatível como Handoff canônico', (t) => {
   const context = createContext(t)
   appendValidation(context, { results: [result('antigo')] })
@@ -95,6 +116,111 @@ test('resolve o último FAIL compatível como Handoff canônico', (t) => {
     target: { responsibility: 'mission-execution' },
     payload: { failedValidators: [result('primeiro'), result('segundo')] },
   })
+})
+
+test('Plan Handoff é opcional sem histórico, approval ou somente com plan', (t) => {
+  const missing = createContext(t)
+  assert.equal(resolveMissionPlanExecutionHandoff(missing, 'mission-0001'), null)
+  const empty = createContext(t)
+  initializeProjectEventStore(empty)
+  assert.equal(resolveMissionPlanExecutionHandoff(empty, 'mission-0001'), null)
+  appendPlan(empty)
+  assert.equal(resolveMissionPlanExecutionHandoff(empty, 'mission-0001'), null)
+})
+
+test('resolve Plan Handoff autorizado com payload clonado e sem session/model', (t) => {
+  const context = createContext(t)
+  const plan = appendPlan(context)
+  const approval = appendPlanApproval(context, plan.id)
+  const before = readProjectEventStore(context)
+  const handoff = resolveMissionPlanExecutionHandoff(context, 'mission-0001')
+  assert.deepEqual(handoff, {
+    schemaVersion: 1, type: 'mission-plan-execution', missionId: 'mission-0001',
+    source: { responsibility: 'mission-planning', eventId: plan.id },
+    authorization: { eventId: approval.id },
+    target: { responsibility: 'mission-execution' },
+    payload: {
+      summary: 'Plano A',
+      steps: [{ title: 'Passo', detail: 'Detalhe', paths: ['index.html'] }],
+      risks: [], validation: [],
+    },
+  })
+  assert.equal(Object.hasOwn(handoff, 'sessionId'), false)
+  assert.equal(Object.hasOwn(handoff, 'model'), false)
+  handoff.payload.steps[0].title = 'mutado'
+  assert.deepEqual(readProjectEventStore(context), before)
+})
+
+test('Plan Handoff falha fechado para source ausente, tipo incorreto ou posterior', (t) => {
+  const missing = createContext(t)
+  appendPlanApproval(missing, 'event-999999')
+  assert.throws(() => resolveMissionPlanExecutionHandoff(missing, 'mission-0001'), /não está disponível/)
+
+  const wrong = createContext(t)
+  appendProjectEvent(wrong, {
+    type: 'mission.plan.unavailable', missionId: 'mission-0001',
+    data: { sessionId: null, model: null, errorMessage: 'x' },
+  })
+  appendPlanApproval(wrong, 'event-000001')
+  assert.throws(() => resolveMissionPlanExecutionHandoff(wrong, 'mission-0001'), /não está disponível/)
+
+  const posterior = createContext(t)
+  appendPlanApproval(posterior, 'event-000002')
+  appendPlan(posterior)
+  assert.throws(() => resolveMissionPlanExecutionHandoff(posterior, 'mission-0001'), /não está disponível/)
+})
+
+test('protege latest plan antes e depois da aprovação', (t) => {
+  const before = createContext(t)
+  const planA = appendPlan(before, 'A')
+  appendPlan(before, 'B')
+  appendPlanApproval(before, planA.id)
+  assert.throws(() => resolveMissionPlanExecutionHandoff(before, 'mission-0001'), /não está disponível/)
+
+  const after = createContext(t)
+  const selected = appendPlan(after, 'A')
+  appendPlanApproval(after, selected.id)
+  appendPlan(after, 'B')
+  assert.throws(() => resolveMissionPlanExecutionHandoff(after, 'mission-0001'), /não está disponível/)
+})
+
+test('plan.unavailable posterior não invalida e aprovação repetida usa a latest', (t) => {
+  const context = createContext(t)
+  const plan = appendPlan(context)
+  appendPlanApproval(context, plan.id)
+  appendProjectEvent(context, {
+    type: 'mission.plan.unavailable', missionId: 'mission-0001',
+    data: { sessionId: null, model: null, errorMessage: 'x' },
+  })
+  const latest = appendPlanApproval(context, plan.id)
+  const handoff = resolveMissionPlanExecutionHandoff(context, 'mission-0001')
+  assert.equal(handoff.source.eventId, plan.id)
+  assert.equal(handoff.authorization.eventId, latest.id)
+})
+
+test('novo plan aprovado substitui stale anterior', (t) => {
+  const context = createContext(t)
+  const planA = appendPlan(context, 'A')
+  appendPlanApproval(context, planA.id)
+  const planB = appendPlan(context, 'B')
+  const approvalB = appendPlanApproval(context, planB.id)
+  const handoff = resolveMissionPlanExecutionHandoff(context, 'mission-0001')
+  assert.equal(handoff.source.eventId, planB.id)
+  assert.equal(handoff.authorization.eventId, approvalB.id)
+})
+
+test('execution posterior ou latest approval inválido não faz fallback', (t) => {
+  const executed = createContext(t)
+  const plan = appendPlan(executed)
+  appendPlanApproval(executed, plan.id)
+  appendExecution(executed)
+  assert.throws(() => resolveMissionPlanExecutionHandoff(executed, 'mission-0001'), /não está disponível/)
+
+  const invalidLatest = createContext(t)
+  const validPlan = appendPlan(invalidLatest)
+  appendPlanApproval(invalidLatest, validPlan.id)
+  appendPlanApproval(invalidLatest, 'event-999999')
+  assert.throws(() => resolveMissionPlanExecutionHandoff(invalidLatest, 'mission-0001'), /não está disponível/)
 })
 
 test('preserva todos os validators, ordem e evidence sem sanitizar', (t) => {

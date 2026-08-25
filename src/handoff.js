@@ -1,4 +1,5 @@
 import { validateMissionReviewResult } from './mission-review-result.js'
+import { validateMissionPlanningResult } from './mission-planning-result.js'
 
 const missionIdPattern = /^mission-\d{4,}$/
 const eventIdPattern = /^event-\d{6,}$/
@@ -61,7 +62,11 @@ export function validateHandoff(handoff) {
     throw new Error('type do handoff deve ser uma string')
   }
 
-  if (!['mission-correction', 'mission-review-correction'].includes(handoff.type)) {
+  if (![
+    'mission-correction',
+    'mission-review-correction',
+    'mission-plan-execution',
+  ].includes(handoff.type)) {
     throw new Error('type do handoff não é suportado')
   }
 
@@ -84,9 +89,11 @@ export function validateHandoff(handoff) {
     throw new Error('source do handoff deve ser um objeto')
   }
 
-  const expectedSourceResponsibility = handoff.type === 'mission-correction'
-    ? 'mission-validation'
-    : 'mission-review'
+  const expectedSourceResponsibility = {
+    'mission-correction': 'mission-validation',
+    'mission-review-correction': 'mission-review',
+    'mission-plan-execution': 'mission-planning',
+  }[handoff.type]
 
   if (handoff.source.responsibility !== expectedSourceResponsibility) {
     throw new Error('responsabilidade de origem do handoff não é suportada')
@@ -103,7 +110,7 @@ export function validateHandoff(handoff) {
     throw new Error('eventId de origem do handoff é inválido')
   }
 
-  if (handoff.type === 'mission-review-correction') {
+  if (handoff.type !== 'mission-correction') {
     if (!isObject(handoff.authorization)) {
       throw new Error('authorization do handoff deve ser um objeto')
     }
@@ -145,6 +152,17 @@ export function validateHandoff(handoff) {
       verdict: 'CONCERNS',
       summary: handoff.payload.summary,
       findings: handoff.payload.findings,
+    })
+
+    return handoff
+  }
+
+  if (handoff.type === 'mission-plan-execution') {
+    validateMissionPlanningResult({
+      summary: handoff.payload.summary,
+      steps: handoff.payload.steps,
+      risks: handoff.payload.risks,
+      validation: handoff.payload.validation,
     })
 
     return handoff

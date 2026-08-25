@@ -12,6 +12,7 @@ const supportedTypes = new Set([
   'mission.review.correction.requested',
   'mission.plan.finished',
   'mission.plan.unavailable',
+  'mission.plan.approved',
 ])
 const executionFromStatuses = new Set(['pending', 'failed', 'correction'])
 const validationOutcomes = new Set(['PASS', 'FAIL', 'ERROR'])
@@ -246,6 +247,15 @@ function validatePlanUnavailableData(data) {
   }
 }
 
+function validatePlanApprovedData(data) {
+  if (
+    typeof data.planEventId !== 'string'
+    || !eventIdPattern.test(data.planEventId)
+  ) {
+    throw new Error('planEventId do evento de aprovação de plano é inválido')
+  }
+}
+
 export function validateProjectEvent(event) {
   if (!isObject(event)) {
     throw new Error('evento deve ser um objeto')
@@ -309,8 +319,10 @@ export function validateProjectEvent(event) {
     validateReviewCorrectionRequestedData(event.data)
   } else if (event.type === 'mission.plan.finished') {
     validatePlanFinishedData(event.data)
-  } else {
+  } else if (event.type === 'mission.plan.unavailable') {
     validatePlanUnavailableData(event.data)
+  } else {
+    validatePlanApprovedData(event.data)
   }
 
   return event

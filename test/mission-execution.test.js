@@ -54,6 +54,24 @@ function appendValidationFailure(context, missionId = 'mission-0001') {
   })
 }
 
+function appendPlan(context, summary = 'Plano') {
+  return appendProjectEvent(context, {
+    type: 'mission.plan.finished', missionId: 'mission-0001',
+    data: {
+      sessionId: 'plan-session', model: 'plan-model', summary,
+      steps: [{ title: 'Passo', detail: 'Detalhe', paths: ['index.html'] }],
+      risks: [], validation: [],
+    },
+  })
+}
+
+function appendPlanApproval(context, planEventId) {
+  return appendProjectEvent(context, {
+    type: 'mission.plan.approved', missionId: 'mission-0001',
+    data: { planEventId },
+  })
+}
+
 test('rejeita State Store inexistente antes de executar OpenClaude', async (t) => {
   const context = createTemporaryContext(t)
 
@@ -97,6 +115,76 @@ test('rejeita dependency bloqueada sem iniciar execução', async (t) => {
     ['pending', 'pending'],
   )
   assert.equal(existsSync(join(context.projectRoot, '.jzl', 'events.json')), false)
+})
+
+test('pending com plan.finished sem approval continua execução normal', async (t) => {
+  const context = createTemporaryContext(t)
+  initializeProjectStateStore(context)
+  createProjectMission(context, { title: 'A', objective: 'A' })
+  appendPlan(context)
+  await assert.rejects(executeProjectMission(context, 'mission-0001'), {
+    message: 'arquivo de configuração do projeto não existe',
+  })
+  assert.equal(readProjectStateStore(context).missions[0].status, 'failed')
+  assert.equal(readProjectEventStore(context).events.at(-1).type, 'mission.execution.finished')
+})
+
+test('pending com approval stale falha antes de running e de execução', async (t) => {
+  const context = createTemporaryContext(t)
+  initializeProjectStateStore(context)
+  createProjectMission(context, { title: 'A', objective: 'A' })
+  const planA = appendPlan(context, 'A')
+  appendPlanApproval(context, planA.id)
+  appendPlan(context, 'B')
+  const before = readProjectEventStore(context)
+  await assert.rejects(executeProjectMission(context, 'mission-0001'), {
+    message: 'handoff de plano da Mission não está disponível',
+  })
+  assert.equal(readProjectStateStore(context).missions[0].status, 'pending')
+  assert.deepEqual(readProjectEventStore(context), before)
+})
+
+test('pending com latest approval relacionalmente inválido falha fechado', async (t) => {
+  const context = createTemporaryContext(t)
+  initializeProjectStateStore(context)
+  createProjectMission(context, { title: 'A', objective: 'A' })
+  appendPlanApproval(context, 'event-999999')
+  await assert.rejects(executeProjectMission(context, 'mission-0001'), {
+    message: 'handoff de plano da Mission não está disponível',
+  })
+  assert.equal(readProjectStateStore(context).missions[0].status, 'pending')
+  assert.equal(readProjectEventStore(context).events.length, 1)
+})
+
+test('correction ignora plan approval antigo e usa Handoff de correção', async (t) => {
+  const context = createTemporaryContext(t)
+  const correctionMission = {
+    id: 'mission-0001', title: 'A', objective: 'A', status: 'correction', dependencies: [],
+  }
+  initializeProjectStateStore(context)
+  initializeProjectConfigStore(context, { template: 'traditional-web' })
+  writeProjectStateStore(context, { schemaVersion: 1, missions: [correctionMission] })
+  const plan = appendPlan(context)
+  appendPlanApproval(context, plan.id)
+  appendValidationFailure(context)
+  await assert.rejects(executeProjectMission(context, 'mission-0001'), /modelo não configurado/)
+  assert.equal(readProjectStateStore(context).missions[0].status, 'failed')
+  assert.equal(readProjectEventStore(context).events.at(-1).data.fromStatus, 'correction')
+})
+
+test('failed retry ignora plan approval antigo', async (t) => {
+  const context = createTemporaryContext(t)
+  const failedMission = {
+    id: 'mission-0001', title: 'A', objective: 'A', status: 'failed', dependencies: [],
+  }
+  initializeProjectStateStore(context)
+  initializeProjectConfigStore(context, { template: 'traditional-web' })
+  writeProjectStateStore(context, { schemaVersion: 1, missions: [failedMission] })
+  const plan = appendPlan(context)
+  appendPlanApproval(context, plan.id)
+  await assert.rejects(executeProjectMission(context, 'mission-0001'), /modelo não configurado/)
+  assert.equal(readProjectStateStore(context).missions[0].status, 'failed')
+  assert.equal(readProjectEventStore(context).events.at(-1).data.fromStatus, 'failed')
 })
 
 test('rejeita statuses não executáveis sem reescrever estado', async (t) => {
@@ -346,6 +434,10 @@ test('falha de history após failed preserva estado e ambos os erros', async (t)
   const context = createTemporaryContext(t)
   initializeProjectStateStore(context)
   const mission = createProjectMission(context, { title: 'A', objective: 'A' })
+  writeProjectStateStore(context, {
+    schemaVersion: 1,
+    missions: [{ ...mission, status: 'failed' }],
+  })
   mkdirSync(join(context.projectRoot, '.jzl', 'events.json'))
 
   await assert.rejects(

@@ -13,6 +13,7 @@ import {
   recordMissionReviewUnavailable,
   recordMissionPlanFinished,
   recordMissionPlanUnavailable,
+  recordMissionPlanApproved,
   recordMissionValidationFinished,
   recordMissionValidationUnavailable,
 } from '../src/execution-history.js'
@@ -241,4 +242,13 @@ test('planning unavailable audita model e session conhecidos', (t) => {
   assert.deepEqual(event.data, {
     sessionId: 'plan-session', model: 'plan-model', errorMessage: 'timeout',
   })
+})
+
+test('registra aprovação de plano somente por referência causal', (t) => {
+  const context = createContext(t)
+  const event = recordMissionPlanApproved(context, {
+    missionId: 'mission-0001', planEventId: 'event-000123',
+  })
+  assert.equal(event.type, 'mission.plan.approved')
+  assert.deepEqual(event.data, { planEventId: 'event-000123' })
 })

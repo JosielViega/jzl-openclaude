@@ -72,7 +72,7 @@ A Mission Review é consultiva e não possui autoridade sobre o workflow. Um res
 
 ### Mission Planning
 
-O Mission Planning é uma responsabilidade probabilística consultiva que produz um plano estruturado para uma Mission `pending` e pronta, em sessão fresh e somente leitura. O resultado é auditado no Event Log sem autorizar execução, implementar mudanças ou realizar transições de workflow. No v1, não compartilha transcript e não cria Plan Handoff.
+O Mission Planning é uma responsabilidade probabilística consultiva que produz um plano estruturado para uma Mission `pending` e pronta, em sessão fresh e somente leitura. Planning continua opcional e não altera o workflow. Um plano só entra na execução após autorização explícita do Host/JZL, auditada como `mission.plan.approved`, por meio de um Handoff `mission-plan-execution`. O source probabilístico e a autorização determinística permanecem separados; um novo `mission.plan.finished` torna a aprovação anterior stale. Nenhum transcript é compartilhado.
 
 ### Execution History / Event Log
 

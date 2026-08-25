@@ -125,6 +125,14 @@ export function recordMissionPlanUnavailable(context, input) {
   })
 }
 
+export function recordMissionPlanApproved(context, input) {
+  return appendProjectEvent(context, {
+    type: 'mission.plan.approved',
+    missionId: input.missionId,
+    data: { planEventId: input.planEventId },
+  })
+}
+
 export function listProjectHistory(context, missionId) {
   if (
     missionId !== undefined

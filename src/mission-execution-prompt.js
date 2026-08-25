@@ -123,14 +123,93 @@ ${findings}
 Corrija somente os problemas pertinentes à Mission e ao código observável, sem ampliar desnecessariamente o escopo.`
 }
 
+function renderPlanStep(step) {
+  const paths = step.paths.length === 0
+    ? '(nenhum path específico)'
+    : step.paths.map((path) => `- ${path}`).join('\n')
+
+  return `Passo:
+${step.title}
+
+Detalhe:
+${step.detail}
+
+Paths:
+${paths}`
+}
+
+function renderPlanHandoff(handoff) {
+  const steps = handoff.payload.steps.map(renderPlanStep).join('\n\n')
+  const risks = handoff.payload.risks.length === 0
+    ? '(nenhum risco específico registrado)'
+    : handoff.payload.risks.map((risk) => `- ${risk}`).join('\n')
+  const validation = handoff.payload.validation.length === 0
+    ? '(nenhuma sugestão específica)'
+    : handoff.payload.validation.map((item) => `- ${item}`).join('\n')
+
+  return `
+
+Handoff estruturado de planejamento recebido:
+
+Tipo:
+${handoff.type}
+
+Responsabilidade de origem:
+${handoff.source.responsibility}
+
+Evento do planejamento:
+${handoff.source.eventId}
+
+Evento de autorização JZL:
+${handoff.authorization.eventId}
+
+Responsabilidade de destino:
+${handoff.target.responsibility}
+
+Plano aprovado:
+
+Resumo:
+${handoff.payload.summary}
+
+IMPORTANTE:
+O plano abaixo foi produzido probabilisticamente por uma sessão de mission-planning e autorizado explicitamente pelo JZL como contexto de execução.
+Ele não substitui a Mission, os standards nem o estado atual do código.
+Verifique cada passo contra o projeto atual e adapte ou ignore qualquer detalhe que tenha ficado incompatível.
+Não amplie desnecessariamente o escopo.
+
+Passos:
+
+${steps}
+
+Riscos:
+
+${risks}
+
+Sugestões de validação do plano:
+
+${validation}
+
+As sugestões de validação acima são consultivas.
+Não as transforme em comandos ou Validators automaticamente.
+O Validator Engine do JZL continua sendo a autoridade determinística de validação.
+
+Implemente a Mission usando o plano aprovado apenas como orientação estruturada, preservando as convenções e o código observável do projeto.`
+}
+
 function renderHandoff(handoff) {
   if (handoff === null) {
     return ''
   }
 
-  return handoff.type === 'mission-review-correction'
-    ? renderReviewHandoff(handoff)
-    : renderValidationHandoff(handoff)
+  if (handoff.type === 'mission-correction') {
+    return renderValidationHandoff(handoff)
+  }
+
+  if (handoff.type === 'mission-review-correction') {
+    return renderReviewHandoff(handoff)
+  }
+
+  return renderPlanHandoff(handoff)
 }
 
 export function buildMissionExecutionPrompt(executionContext) {
@@ -138,7 +217,7 @@ export function buildMissionExecutionPrompt(executionContext) {
   const standardsList = standards.instructions
     .map((instruction) => `- ${instruction}`)
     .join('\n')
-  const correctionSection = renderHandoff(handoff)
+  const handoffSection = renderHandoff(handoff)
 
   return `Você está executando uma Mission controlada pelo JZL.
 
@@ -152,7 +231,7 @@ Objetivo:
 ${mission.objective}
 
 Padrões aplicáveis:
-${standardsList}${correctionSection}
+${standardsList}${handoffSection}
 
 Regras obrigatórias:
 - Trabalhe somente dentro do projeto atual.

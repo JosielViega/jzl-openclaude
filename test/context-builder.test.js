@@ -81,6 +81,28 @@ function reviewHandoff(context, overrides = {}) {
   }
 }
 
+function planHandoff(context, overrides = {}) {
+  return {
+    schemaVersion: 1,
+    type: 'mission-plan-execution',
+    missionId: 'mission-0001',
+    source: { responsibility: 'mission-planning', eventId: 'event-000123' },
+    authorization: { eventId: 'event-000124' },
+    target: { responsibility: 'mission-execution' },
+    payload: {
+      summary: `Plano em ${context.projectRoot}`,
+      steps: [{
+        title: `Título ${context.projectRoot}`,
+        detail: `Detalhe ${context.projectRoot.replaceAll('\\', '/')}`,
+        paths: [`${context.projectRoot}\\index.html`],
+      }],
+      risks: [`Risco ${context.projectRoot}`],
+      validation: [`Validar ${context.projectRoot}`],
+    },
+    ...overrides,
+  }
+}
+
 test('constrói contexto mínimo sem Handoff', (t) => {
   const context = createContext(t)
   const built = buildMissionExecutionContext(context, {
@@ -103,6 +125,86 @@ test('constrói contexto com Handoff canônico para a mesma Mission', (t) => {
     ...handoff(),
     payload: { failedValidators: [validator()], omittedCount: 0 },
   })
+})
+
+test('constrói Plan Handoff redigido preservando envelope e clone defensivo', (t) => {
+  const context = createContext(t)
+  const raw = planHandoff(context)
+  const before = structuredClone(raw)
+  const built = buildMissionExecutionContext(context, {
+    mission: mission(), standards: standards(), handoff: raw,
+  })
+  assert.deepEqual({
+    schemaVersion: built.handoff.schemaVersion,
+    type: built.handoff.type,
+    missionId: built.handoff.missionId,
+    source: built.handoff.source,
+    authorization: built.handoff.authorization,
+    target: built.handoff.target,
+  }, {
+    schemaVersion: 1, type: 'mission-plan-execution', missionId: 'mission-0001',
+    source: { responsibility: 'mission-planning', eventId: 'event-000123' },
+    authorization: { eventId: 'event-000124' },
+    target: { responsibility: 'mission-execution' },
+  })
+  const serialized = JSON.stringify(built.handoff.payload)
+  assert.equal(serialized.includes(context.projectRoot), false)
+  assert.equal(serialized.includes(context.projectRoot.replaceAll('\\', '/')), false)
+  for (const value of [
+    built.handoff.payload.summary,
+    built.handoff.payload.steps[0].title,
+    built.handoff.payload.steps[0].detail,
+    built.handoff.payload.steps[0].paths[0],
+    built.handoff.payload.risks[0],
+    built.handoff.payload.validation[0],
+  ]) assert.ok(value.includes('<projectRoot>'))
+  built.handoff.payload.steps[0].title = 'mutado'
+  assert.deepEqual(raw, before)
+})
+
+test('Plan Handoff preserva limites contextuais finais e ordem', (t) => {
+  const context = createContext(t)
+  const summary = 's'.repeat(4000)
+  const title = 't'.repeat(200)
+  const detail = 'd'.repeat(4000)
+  const path = 'p'.repeat(500)
+  const risk = 'r'.repeat(2000)
+  const validation = 'v'.repeat(2000)
+  const raw = planHandoff(context, {
+    payload: {
+      summary,
+      steps: Array.from({ length: 20 }, () => ({
+        title, detail, paths: Array.from({ length: 20 }, () => path),
+      })),
+      risks: Array.from({ length: 20 }, () => risk),
+      validation: Array.from({ length: 20 }, () => validation),
+    },
+  })
+  const before = structuredClone(raw)
+  const payload = buildMissionExecutionContext(context, {
+    mission: mission(), standards: standards(), handoff: raw,
+  }).handoff.payload
+  assert.equal(payload.summary.length, 4000)
+  assert.equal(payload.steps.length, 20)
+  assert.equal(payload.steps[0].title.length, 200)
+  assert.equal(payload.steps[0].detail.length, 4000)
+  assert.equal(payload.steps[0].paths.length, 20)
+  assert.equal(payload.steps[0].paths[0].length, 500)
+  assert.equal(payload.risks[0].length, 2000)
+  assert.equal(payload.validation[0].length, 2000)
+  assert.equal(payload.summary, summary)
+  assert.equal(payload.steps[0].title, title)
+  assert.equal(payload.risks[0], risk)
+  assert.equal(payload.validation[0], validation)
+  assert.deepEqual(raw, before)
+})
+
+test('rejeita Plan Handoff de outra Mission', (t) => {
+  const context = createContext(t)
+  assert.throws(() => buildMissionExecutionContext(context, {
+    mission: mission(), standards: standards(),
+    handoff: planHandoff(context, { missionId: 'mission-0002' }),
+  }), { message: 'handoff não pertence à Mission de execução' })
 })
 
 test('rejeita Handoff de outra Mission', (t) => {

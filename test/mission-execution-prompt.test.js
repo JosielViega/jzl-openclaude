@@ -68,6 +68,20 @@ function reviewHandoff(paths = ['index.php']) {
   }
 }
 
+function planHandoff({ paths = ['index.html'], risks = ['Risco A'], validation = ['Validar A'] } = {}) {
+  return {
+    schemaVersion: 1, type: 'mission-plan-execution', missionId: 'mission-0001',
+    source: { responsibility: 'mission-planning', eventId: 'event-000123' },
+    authorization: { eventId: 'event-000124' },
+    target: { responsibility: 'mission-execution' },
+    payload: {
+      summary: 'Plano aprovado.',
+      steps: [{ title: 'Atualizar marcador', detail: 'Trocar o texto.', paths }],
+      risks, validation,
+    },
+  }
+}
+
 test('renderiza Mission e standards sem seção de correction no contexto normal', () => {
   const executionContext = createExecutionContext()
   const snapshot = structuredClone(executionContext)
@@ -105,6 +119,35 @@ test('renderiza Handoff determinístico entre standards e regras', () => {
   ))
   assert.ok(prompt.indexOf('Padrões aplicáveis:') < prompt.indexOf('Handoff determinístico'))
   assert.ok(prompt.indexOf('Handoff determinístico') < prompt.indexOf('Regras obrigatórias:'))
+})
+
+test('renderiza Plan Handoff consultivo autorizado sem identidade do Planner', () => {
+  const value = createExecutionContext(planHandoff())
+  value.planningSessionId = 'segredo-session'
+  value.planningModel = 'segredo-model'
+  const before = structuredClone(value)
+  const prompt = buildMissionExecutionPrompt(value)
+  for (const text of [
+    'Handoff estruturado de planejamento recebido:', 'mission-plan-execution',
+    'mission-planning', 'event-000123', 'event-000124', 'mission-execution',
+    'Plano aprovado.', 'Atualizar marcador', 'Trocar o texto.', '- index.html',
+    '- Risco A', '- Validar A', 'produzido probabilisticamente',
+    'autorizado explicitamente pelo JZL', 'não substitui a Mission, os standards',
+    'Validator Engine do JZL continua sendo a autoridade determinística',
+    'orientação estruturada',
+  ]) assert.ok(prompt.includes(text))
+  assert.equal(prompt.includes('segredo-session'), false)
+  assert.equal(prompt.includes('segredo-model'), false)
+  assert.deepEqual(value, before)
+})
+
+test('renderiza coleções vazias do Plan Handoff explicitamente', () => {
+  const prompt = buildMissionExecutionPrompt(createExecutionContext(planHandoff({
+    paths: [], risks: [], validation: [],
+  })))
+  assert.ok(prompt.includes('(nenhum path específico)'))
+  assert.ok(prompt.includes('(nenhum risco específico registrado)'))
+  assert.ok(prompt.includes('(nenhuma sugestão específica)'))
 })
 
 test('preserva a ordem de dois failed validators', () => {

@@ -8,6 +8,7 @@ import {
 import { executeProjectMission } from './mission-execution.js'
 import { reviewProjectMission } from './mission-review.js'
 import { planProjectMission } from './mission-planning.js'
+import { approveMissionPlan } from './mission-plan-approval.js'
 import { requestMissionReviewCorrection } from './mission-review-correction.js'
 import { validateConfiguredProjectMission } from './mission-validation.js'
 import { createProjectContext } from './project-context.js'
@@ -120,6 +121,18 @@ try {
     printJson(await planProjectMission(
       createContext(options),
       options['--mission'],
+    ))
+  } else if (command === 'approve-plan') {
+    const options = parseCliOptions(argumentsList, {
+      ...projectRootOption,
+      '--mission': { required: true },
+      '--plan-event': { required: true },
+    })
+
+    printJson(approveMissionPlan(
+      createContext(options),
+      options['--mission'],
+      options['--plan-event'],
     ))
   } else if (command === 'request-review-correction') {
     const options = parseCliOptions(argumentsList, {

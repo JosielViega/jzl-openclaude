@@ -148,14 +148,54 @@ function buildReviewHandoff(context, handoff) {
   }
 }
 
+function buildPlanHandoff(context, handoff) {
+  const redactProjectRoot = createProjectRootRedactor(context)
+  const sanitize = (text, maximumLength) => truncateText(
+    redactProjectRoot(text),
+    maximumLength,
+  )
+
+  return {
+    schemaVersion: handoff.schemaVersion,
+    type: handoff.type,
+    missionId: handoff.missionId,
+    source: {
+      responsibility: handoff.source.responsibility,
+      eventId: handoff.source.eventId,
+    },
+    authorization: { eventId: handoff.authorization.eventId },
+    target: { responsibility: handoff.target.responsibility },
+    payload: {
+      summary: sanitize(handoff.payload.summary, 4000),
+      steps: handoff.payload.steps.slice(0, 20).map((step) => ({
+        title: sanitize(step.title, 200),
+        detail: sanitize(step.detail, 4000),
+        paths: step.paths.slice(0, 20).map((path) => sanitize(path, 500)),
+      })),
+      risks: handoff.payload.risks.slice(0, 20).map(
+        (risk) => sanitize(risk, 2000),
+      ),
+      validation: handoff.payload.validation.slice(0, 20).map(
+        (item) => sanitize(item, 2000),
+      ),
+    },
+  }
+}
+
 function buildHandoff(context, handoff) {
   if (handoff === null) {
     return null
   }
 
-  return handoff.type === 'mission-review-correction'
-    ? buildReviewHandoff(context, handoff)
-    : buildValidationHandoff(context, handoff)
+  if (handoff.type === 'mission-correction') {
+    return buildValidationHandoff(context, handoff)
+  }
+
+  if (handoff.type === 'mission-review-correction') {
+    return buildReviewHandoff(context, handoff)
+  }
+
+  return buildPlanHandoff(context, handoff)
 }
 
 export function buildMissionExecutionContext(context, input) {

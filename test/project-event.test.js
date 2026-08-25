@@ -243,6 +243,21 @@ test('planning unavailable exige propriedades nullable e mensagem', () => {
   ]) assert.throws(() => validateProjectEvent(event('mission.plan.unavailable', data)), { message })
 })
 
+test('aceita plan approved com campos aditivos', () => {
+  const value = event('mission.plan.approved', {
+    planEventId: 'event-000123', extra: true,
+  })
+  assert.strictEqual(validateProjectEvent(value), value)
+})
+
+test('plan approved exige planEventId válido', () => {
+  for (const data of [{}, { planEventId: 'event-1' }, { planEventId: 1 }]) {
+    assert.throws(() => validateProjectEvent(event('mission.plan.approved', data)), {
+      message: 'planEventId do evento de aprovação de plano é inválido',
+    })
+  }
+})
+
 test('aceita pedido de correção por revisão e campos aditivos', () => {
   const value = event('mission.review.correction.requested', {
     reviewEventId: 'event-000123', fromStatus: 'validation',

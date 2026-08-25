@@ -518,6 +518,80 @@ test('plan-mission pronta sem modelo registra unavailable e preserva pending', (
   assert.equal(readProjectEventStore(context).events[0].type, 'mission.plan.unavailable')
 })
 
+test('approve-plan exige flags singulares e rejeita opções desconhecidas', () => {
+  for (const [argumentsList, message] of [
+    [['approve-plan', '--project-root', 'root', '--plan-event', 'event-000001'], '--mission é obrigatório'],
+    [['approve-plan', '--project-root', 'root', '--mission', 'mission-0001'], '--plan-event é obrigatório'],
+    [['approve-plan', '--project-root', 'root', '--mission', 'mission-0001', '--plan-event', 'event-000001', '--plan-event', 'event-000002'], 'opção duplicada: --plan-event'],
+    [['approve-plan', '--project-root', 'root', '--mission', 'mission-0001', '--plan-event', 'event-000001', '--other', 'x'], 'argumento desconhecido: --other'],
+  ]) {
+    const result = runCli(argumentsList)
+    assert.equal(result.status, 1)
+    assert.equal(result.stdout, '')
+    assert.equal(result.stderr.trim(), message)
+  }
+})
+
+test('approve-plan rejeita status, readiness e evento inexistente', (t) => {
+  const statusRoot = createRoot(t)
+  const statusContext = createProjectContext(statusRoot)
+  initializeProjectStateStore(statusContext)
+  writeProjectStateStore(statusContext, {
+    schemaVersion: 1,
+    missions: [{ id: 'mission-0001', title: 'A', objective: 'A', status: 'running', dependencies: [] }],
+  })
+  let result = runCli(['approve-plan', '--project-root', statusRoot, '--mission', 'mission-0001', '--plan-event', 'event-000001'])
+  assert.equal(result.stderr.trim(), 'Mission deve estar pending para aprovação de plano')
+
+  const blockedRoot = createRoot(t)
+  const blockedContext = createProjectContext(blockedRoot)
+  initializeProjectStateStore(blockedContext)
+  writeProjectStateStore(blockedContext, {
+    schemaVersion: 1,
+    missions: [
+      { id: 'mission-0001', title: 'A', objective: 'A', status: 'pending', dependencies: ['mission-0002'] },
+      { id: 'mission-0002', title: 'B', objective: 'B', status: 'pending', dependencies: [] },
+    ],
+  })
+  result = runCli(['approve-plan', '--project-root', blockedRoot, '--mission', 'mission-0001', '--plan-event', 'event-000001'])
+  assert.equal(result.stderr.trim(), 'Mission deve estar pronta para aprovação de plano')
+
+  const missingRoot = createRoot(t)
+  initProject(missingRoot)
+  runJsonCli(['create-mission', '--project-root', missingRoot, '--title', 'A', '--objective', 'A'])
+  result = runCli(['approve-plan', '--project-root', missingRoot, '--mission', 'mission-0001', '--plan-event', 'event-999999'])
+  assert.equal(result.stderr.trim(), 'evento de planejamento não está disponível para a Mission')
+})
+
+test('approve-plan rejeita plan antigo e aprova latest em um único JSON', (t) => {
+  const root = createRoot(t)
+  initProject(root)
+  runJsonCli(['create-mission', '--project-root', root, '--title', 'A', '--objective', 'A'])
+  const context = createProjectContext(root)
+  const appendPlan = (summary) => appendProjectEvent(context, {
+    type: 'mission.plan.finished', missionId: 'mission-0001',
+    data: {
+      sessionId: `session-${summary}`, model: 'plan-model', summary,
+      steps: [{ title: 'Passo', detail: 'Detalhe', paths: ['index.html'] }],
+      risks: [], validation: [],
+    },
+  })
+  const planA = appendPlan('A')
+  const planB = appendPlan('B')
+  let result = runCli(['approve-plan', '--project-root', root, '--mission', 'mission-0001', '--plan-event', planA.id])
+  assert.equal(result.status, 1)
+  assert.equal(result.stderr.trim(), 'evento de planejamento não é o planejamento concluído mais recente da Mission')
+
+  const { result: success, output } = runJsonCli([
+    'approve-plan', '--project-root', root, '--mission', 'mission-0001', '--plan-event', planB.id,
+  ])
+  assert.equal(success.stdout.trim().split(/\r?\n/).length, 1)
+  assert.equal(output.mission.status, 'pending')
+  assert.equal(output.approvalEvent.type, 'mission.plan.approved')
+  assert.deepEqual(output.approvalEvent.data, { planEventId: planB.id })
+  assert.equal(readProjectStateStore(context).missions[0].status, 'pending')
+})
+
 test('request-review-correction exige flags singulares', () => {
   for (const [argumentsList, message] of [
     [['request-review-correction', '--project-root', 'root', '--review-event', 'event-000001'], '--mission é obrigatório'],
