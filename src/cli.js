@@ -15,6 +15,7 @@ import { createProjectContext } from './project-context.js'
 import { validateProjectRoot } from './project-root.js'
 import { runProjectMission } from './project-runner.js'
 import { configureProjectModel } from './model-router.js'
+import { buildMissionAuditReport } from './mission-audit-report.js'
 
 const projectRootOption = {
   '--project-root': { required: true },
@@ -189,6 +190,16 @@ try {
     printJson({
       events: listProjectHistory(createContext(options), options['--mission']),
     })
+  } else if (command === 'mission-report') {
+    const options = parseCliOptions(argumentsList, {
+      ...projectRootOption,
+      '--mission': { required: true },
+    })
+
+    printJson(buildMissionAuditReport(
+      createContext(options),
+      options['--mission'],
+    ))
   } else {
     throw new Error(`comando desconhecido: ${command}`)
   }

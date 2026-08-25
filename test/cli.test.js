@@ -407,6 +407,103 @@ test('history retorna eventos em ordem em um único JSON', (t) => {
   assert.equal(result.stdout.trim().split(/\r?\n/).length, 1)
 })
 
+test('mission-report legacy sem history retorna um JSON e não cria Event Store', (t) => {
+  const root = createRoot(t)
+  const context = createProjectContext(root)
+  const mission = {
+    id: 'mission-0001', title: 'Legacy', objective: 'Auditar',
+    status: 'pending', dependencies: [],
+  }
+  initializeProjectStateStore(context)
+  writeProjectStateStore(context, { schemaVersion: 1, missions: [mission] })
+
+  const { result, output } = runJsonCli([
+    'mission-report', '--project-root', root, '--mission', mission.id,
+  ])
+  assert.deepEqual(output, {
+    mission,
+    planning: { plan: null, approval: null },
+    currentCycle: {
+      execution: null, validation: null, review: null, reviewCorrection: null,
+    },
+  })
+  assert.equal(result.stdout.trim().split(/\r?\n/).length, 1)
+  assert.equal(existsSync(join(root, '.jzl', 'events.json')), false)
+})
+
+test('mission-report mostra ciclo completed persistido', (t) => {
+  const root = createRoot(t)
+  const context = createProjectContext(root)
+  const mission = {
+    id: 'mission-0001', title: 'Completed', objective: 'Auditar',
+    status: 'completed', dependencies: [], acceptanceCriteria: [],
+  }
+  initializeProjectStateStore(context)
+  writeProjectStateStore(context, { schemaVersion: 1, missions: [mission] })
+  const execution = appendProjectEvent(context, {
+    type: 'mission.execution.finished', missionId: mission.id,
+    data: {
+      outcome: 'SUCCESS', fromStatus: 'pending', toStatus: 'validation',
+      sessionId: 'session-cli-report', model: 'synthetic', result: 'ok',
+      changeSet: { created: [], modified: [], deleted: [] },
+    },
+  })
+  const validation = appendProjectEvent(context, {
+    type: 'mission.validation.finished', missionId: mission.id,
+    data: {
+      outcome: 'PASS', fromStatus: 'validation', toStatus: 'completed',
+      results: [{ id: 'validator', status: 'PASS', evidence: {
+        exitCode: 0, signal: null, stdout: '', stderr: '', errorMessage: null,
+      } }],
+    },
+  })
+
+  const { output } = runJsonCli([
+    'mission-report', '--project-root', root, '--mission', mission.id,
+  ])
+  assert.equal(output.mission.status, 'completed')
+  assert.equal(output.currentCycle.execution.eventId, execution.id)
+  assert.equal(output.currentCycle.validation.eventId, validation.id)
+  assert.equal(output.currentCycle.validation.kind, 'finished')
+})
+
+test('mission-report exige flags singulares e rejeita desconhecidas', (t) => {
+  const root = createRoot(t)
+  const context = createProjectContext(root)
+  initializeProjectStateStore(context)
+  writeProjectStateStore(context, { schemaVersion: 1, missions: [{
+    id: 'mission-0001', title: 'Mission', objective: 'Audit',
+    status: 'pending', dependencies: [],
+  }] })
+
+  for (const [args, message] of [
+    [['mission-report', '--project-root', root], '--mission é obrigatório'],
+    [[
+      'mission-report', '--project-root', root,
+      '--mission', 'mission-0001', '--mission', 'mission-0001',
+    ], 'opção duplicada: --mission'],
+    [[
+      'mission-report', '--project-root', root,
+      '--mission', 'mission-0001', '--extra', 'x',
+    ], 'argumento desconhecido: --extra'],
+  ]) {
+    const result = runCli(args)
+    assert.equal(result.status, 1)
+    assert.equal(result.stderr.trim(), message)
+  }
+})
+
+test('mission-report rejeita Mission inexistente', (t) => {
+  const root = createRoot(t)
+  const context = createProjectContext(root)
+  initializeProjectStateStore(context)
+  const result = runCli([
+    'mission-report', '--project-root', root, '--mission', 'mission-9999',
+  ])
+  assert.equal(result.status, 1)
+  assert.equal(result.stderr.trim(), 'Mission não existe')
+})
+
 test('history filtra por Mission e retorna vazio para Mission sem eventos', (t) => {
   const root = createRoot(t)
   initProject(root)

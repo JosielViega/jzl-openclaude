@@ -90,6 +90,10 @@ O Mission Planning é uma responsabilidade probabilística consultiva que produz
 
 Registra eventos e resultados relevantes da execução para auditoria, diagnóstico e rastreabilidade. O histórico explica o que ocorreu, mas não substitui o estado autoritativo do State Store.
 
+### Mission Audit Report
+
+Oferece uma visão derivada e somente leitura da Mission atual no State e dos fatos auditados no Event Log, sem Store próprio, novo Event ou chamada a modelo. Planejamento aparece separadamente, enquanto o ciclo atual é ancorado pela última tentativa de execução, seja `SUCCESS` ou `ERROR`, sem misturar validation ou review anteriores. O relatório não recalcula Change Set, não revalida a Mission e não recomenda a próxima ação; o comando `history` continua sendo a timeline completa.
+
 ## Fluxo conceitual
 
 1. O Project Context delimita o projeto e seu `projectRoot`.
