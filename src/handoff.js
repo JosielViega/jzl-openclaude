@@ -4,6 +4,7 @@ import { isMissionAcceptanceCriterionType } from './mission-acceptance-criterion
 import { validateExecutionChangeSet } from './execution-change-set.js'
 import { validateTraditionalWebStructureIssue } from './traditional-web-structure.js'
 import { validateTraditionalWebSourceTextIssue } from './traditional-web-source-text.js'
+import { validateTraditionalWebPublicExposureIssue } from './traditional-web-public-exposure.js'
 
 const missionIdPattern = /^mission-\d{4,}$/
 const eventIdPattern = /^event-\d{6,}$/
@@ -103,11 +104,15 @@ function validateEvidence(validator) {
       ? validateTraditionalWebStructureIssue
       : evidence.standardType === 'source-text'
         ? validateTraditionalWebSourceTextIssue
+        : evidence.standardType === 'public-exposure'
+          ? validateTraditionalWebPublicExposureIssue
         : null
     const expectedId = evidence.standardType === 'structure'
       ? 'traditional-web:structure'
       : evidence.standardType === 'source-text'
         ? 'traditional-web:source-text'
+        : evidence.standardType === 'public-exposure'
+          ? 'traditional-web:public-exposure'
         : null
     if (
       issueValidator === null
@@ -161,7 +166,11 @@ function validateEvidence(validator) {
     if (validator.id === 'traditional-web:ascii-paths') {
       throw new Error('metadata do standard no handoff é incompleta')
     }
-    if (['traditional-web:structure', 'traditional-web:source-text'].includes(validator.id)) {
+    if ([
+      'traditional-web:structure',
+      'traditional-web:source-text',
+      'traditional-web:public-exposure',
+    ].includes(validator.id)) {
       throw new Error('metadata do standard no handoff é incompleta')
     }
     return

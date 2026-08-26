@@ -13,7 +13,7 @@ test('cria configuração traditional-web mínima', () => {
   assert.deepEqual(createProjectConfig({ template: 'traditional-web' }), {
     schemaVersion: 1,
     template: 'traditional-web',
-    standardsProfile: 'traditional-web-v2',
+    standardsProfile: 'traditional-web-v3',
     tools: {},
   })
 })
@@ -25,7 +25,7 @@ test('cria configuração com PHP e argsPrefix padrão', () => {
   }), {
     schemaVersion: 1,
     template: 'traditional-web',
-    standardsProfile: 'traditional-web-v2',
+    standardsProfile: 'traditional-web-v3',
     tools: { php: { executable: absolutePhp, argsPrefix: [] } },
   })
 })
@@ -72,7 +72,7 @@ for (const [name, config, message] of [
   ['standardsProfile não string', { schemaVersion: 1, template: 'traditional-web', standardsProfile: null, tools: {} }, 'standardsProfile da configuração do projeto deve ser uma string'],
   ['standardsProfile vazio', { schemaVersion: 1, template: 'traditional-web', standardsProfile: '', tools: {} }, 'standardsProfile da configuração do projeto não pode ser vazio'],
   ['standardsProfile whitespace', { schemaVersion: 1, template: 'traditional-web', standardsProfile: '   ', tools: {} }, 'standardsProfile da configuração do projeto não pode ser vazio'],
-  ['standardsProfile v3', { schemaVersion: 1, template: 'traditional-web', standardsProfile: 'traditional-web-v3', tools: {} }, 'standardsProfile da configuração do projeto não é suportado para o template'],
+  ['standardsProfile v4', { schemaVersion: 1, template: 'traditional-web', standardsProfile: 'traditional-web-v4', tools: {} }, 'standardsProfile da configuração do projeto não é suportado para o template'],
   ['standardsProfile alheio', { schemaVersion: 1, template: 'traditional-web', standardsProfile: 'unity-v1', tools: {} }, 'standardsProfile da configuração do projeto não é suportado para o template'],
   ['standardsProfile com espaço inicial', { schemaVersion: 1, template: 'traditional-web', standardsProfile: ' traditional-web-v1', tools: {} }, 'standardsProfile da configuração do projeto não é suportado para o template'],
   ['standardsProfile com espaço final', { schemaVersion: 1, template: 'traditional-web', standardsProfile: 'traditional-web-v1 ', tools: {} }, 'standardsProfile da configuração do projeto não é suportado para o template'],
@@ -118,7 +118,7 @@ test('createProjectConfig não muta input nem argsPrefix', () => {
   const snapshot = structuredClone(input)
   const config = createProjectConfig(input)
 
-  assert.equal(config.standardsProfile, 'traditional-web-v2')
+  assert.equal(config.standardsProfile, 'traditional-web-v3')
   config.tools.php.argsPrefix.push('changed')
   assert.deepEqual(input, snapshot)
   assert.strictEqual(input.tools.php.argsPrefix, argsPrefix)
@@ -172,7 +172,7 @@ test('createProjectConfig omite models ausente e clona models presente', () => {
   const input = { template: 'traditional-web', models }
   const snapshot = structuredClone(input)
   const config = createProjectConfig(input)
-  assert.equal(config.standardsProfile, 'traditional-web-v2')
+  assert.equal(config.standardsProfile, 'traditional-web-v3')
   assert.deepEqual(config.models, models)
   assert.notStrictEqual(config.models, models)
   config.models['mission-execution'] = 'changed'

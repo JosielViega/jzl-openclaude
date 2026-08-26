@@ -160,6 +160,23 @@ test('transporta Source Text FAIL automaticamente sem conteúdo', (t) => {
   )
 })
 
+test('transporta Public Exposure FAIL automaticamente sem conteúdo', (t) => {
+  const context = createContext(t)
+  const exposure = {
+    id: 'traditional-web:public-exposure', status: 'FAIL',
+    evidence: {
+      exitCode: null, signal: null, stdout: '', stderr: '', errorMessage: null,
+      standardType: 'public-exposure',
+      issues: [{ path: 'public/vendor', reason: 'dependency-path-publicly-exposed' }],
+    },
+  }
+  const source = appendValidation(context, { results: [exposure] })
+  const handoff = resolveMissionCorrectionHandoff(context, 'mission-0001')
+  assert.equal(handoff.source.eventId, source.id)
+  assert.deepEqual(handoff.payload.failedValidators, [exposure])
+  assert.equal(JSON.stringify(handoff).includes('DO_NOT_LEAK'), false)
+})
+
 test('Plan Handoff é opcional sem histórico, approval ou somente com plan', (t) => {
   const missing = createContext(t)
   assert.equal(resolveMissionPlanExecutionHandoff(missing, 'mission-0001'), null)

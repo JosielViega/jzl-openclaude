@@ -605,7 +605,8 @@ test('configured HTML-only usa criteria e legacy vazio mantém unavailable', asy
   assert.equal(accepted.validation.status, 'PASS')
   assert.equal(accepted.mission.status, 'completed')
   assert.deepEqual(accepted.validation.results.map(({ id }) => id), [
-    'criterion-0001', 'traditional-web:structure', 'traditional-web:ascii-paths',
+    'criterion-0001', 'traditional-web:structure',
+    'traditional-web:public-exposure', 'traditional-web:ascii-paths',
     'traditional-web:source-text',
   ])
 
@@ -714,6 +715,42 @@ test('Source Text FAIL v2 solicita correction, Event, Handoff e prompt', async (
   assert.match(prompt, /public\/assets\/css\/app\.css/)
   assert.match(prompt, /invalid-utf8/)
   assert.equal(prompt.includes(projectRoot), false)
+})
+
+test('Public Exposure FAIL v3 solicita correction sem vazar conteúdo', async (t) => {
+  const { context, projectRoot } = createTemporaryContext(t)
+  const mission = createMission('mission-0001')
+  initializeMissions(context, [mission])
+  initializeProjectConfigStore(context, { template: 'traditional-web', tools: {} })
+  ensureTraditionalWebProjectStructure(context)
+  mkdirSync(join(projectRoot, 'public', 'vendor'))
+  writeFileSync(join(projectRoot, 'public', 'vendor', 'secret.txt'), 'DO_NOT_LEAK')
+
+  const result = await validateConfiguredProjectMission(context, mission.id)
+  assert.equal(result.validation.status, 'FAIL')
+  assert.equal(result.mission.status, 'correction')
+  const exposure = result.validation.results.find(
+    ({ id }) => id === 'traditional-web:public-exposure'
+  )
+  assert.deepEqual(exposure.evidence.issues, [{
+    path: 'public/vendor', reason: 'dependency-path-publicly-exposed',
+  }])
+  const event = readProjectEventStore(context).events.at(-1)
+  assert.equal(event.type, 'mission.validation.finished')
+  assert.equal(event.data.outcome, 'FAIL')
+  const handoff = resolveMissionCorrectionHandoff(context, mission.id)
+  assert.deepEqual(handoff.payload.failedValidators, [exposure])
+  const executionContext = buildMissionExecutionContext(context, {
+    mission: retryProjectMissionCorrection(context, mission.id),
+    standards: { id: 'traditional-web-v3', instructions: ['Preserve o projeto.'] },
+    handoff,
+  })
+  const prompt = buildMissionExecutionPrompt(executionContext)
+  assert.match(prompt, /public\/vendor/)
+  assert.match(prompt, /dependency-path-publicly-exposed/)
+  for (const value of [exposure, event, handoff, executionContext, prompt]) {
+    assert.equal(JSON.stringify(value).includes('DO_NOT_LEAK'), false)
+  }
 })
 
 test('PHP configurado PASS sem Acceptance não comprova objetivo', async (t) => {

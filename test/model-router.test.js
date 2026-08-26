@@ -137,6 +137,18 @@ test('configure model não migra standardsProfile de config legacy', (t) => {
   assert.equal(Object.hasOwn(config, 'standardsProfile'), false)
 })
 
+test('configure model preserva profile v2 explicitamente pinned', (t) => {
+  const context = setup(t)
+  writeProjectConfigStore(context, {
+    schemaVersion: 1, template: 'traditional-web',
+    standardsProfile: 'traditional-web-v2', tools: {},
+  })
+  configureProjectModel(context, {
+    responsibility: 'mission-execution', model: 'model-a',
+  })
+  assert.equal(readProjectConfigStore(context).standardsProfile, 'traditional-web-v2')
+})
+
 test('configure inválido e Store ausente falham sem inicialização', (t) => {
   const context = setup(t)
   const before = structuredClone(readProjectConfigStore(context))

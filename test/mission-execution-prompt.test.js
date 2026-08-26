@@ -322,3 +322,24 @@ test('renderiza Source Text issues sem bytes ou conteúdo', () => {
   assert.match(prompt, /- public\/assets\/css\/app\.css\n  Motivo: invalid-utf8/)
   assert.equal(prompt.includes('0xff'), false)
 })
+
+test('renderiza Public Exposure issues sem conteúdo ou target', () => {
+  const exposure = failedValidator('traditional-web:public-exposure', {
+    exitCode: null,
+    stderr: '',
+    standardType: 'public-exposure',
+    issues: [
+      { path: 'public/.env', reason: 'environment-path-publicly-exposed' },
+      { path: 'public/vendor', reason: 'dependency-path-publicly-exposed' },
+    ],
+  })
+  const prompt = buildMissionExecutionPrompt(createExecutionContext(handoff({
+    payload: { failedValidators: [exposure], omittedCount: 0 },
+  })))
+  assert.match(prompt, /Traditional Web Standard:\ntraditional-web:public-exposure/)
+  assert.match(prompt, /Tipo:\npublic-exposure/)
+  assert.match(prompt, /Exposições públicas proibidas detectadas:/)
+  assert.match(prompt, /public\/\.env[\s\S]+environment-path-publicly-exposed/)
+  assert.match(prompt, /public\/vendor[\s\S]+dependency-path-publicly-exposed/)
+  assert.equal(prompt.includes('DO_NOT_LEAK'), false)
+})

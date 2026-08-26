@@ -125,7 +125,7 @@ test('check-standards retorna PASS ou FAIL com exit zero sem criar State/Event S
   writeFileSync(join(root, 'public', 'assets', 'js', 'index.js'), 'export const value = 1\n')
 
   const passed = runJsonCli(['check-standards', '--project-root', root])
-  assert.equal(passed.output.standard, 'traditional-web-v2')
+  assert.equal(passed.output.standard, 'traditional-web-v3')
   assert.equal(passed.output.status, 'PASS')
 
   writeFileSync(join(root, 'public', 'assets', 'js', 'index.js'), 'const =')
@@ -262,7 +262,7 @@ test('upgrade-standards CLI faz preview FAIL e PASS antes do upgrade real', (t) 
   assert.equal(upgraded.upgraded, true)
   assert.equal(JSON.parse(readFileSync(configPath, 'utf8')).standardsProfile, 'traditional-web-v2')
 
-  for (const to of ['traditional-web-v1', 'traditional-web-v2', 'traditional-web-v3']) {
+  for (const to of ['traditional-web-v1', 'traditional-web-v2']) {
     const rejected = runCli([
       'upgrade-standards', '--project-root', root, '--to', to,
     ])
@@ -293,6 +293,52 @@ test('upgrade-standards CLI retorna aggregate ERROR com exit zero', (t) => {
   assert.deepEqual(readFileSync(configPath), before)
 })
 
+test('upgrade-standards CLI preflight v2 para v3 respeita Public Exposure', (t) => {
+  const root = createRoot(t)
+  const context = createProjectContext(root)
+  mkdirSync(join(root, '.jzl'))
+  const configPath = join(root, '.jzl', 'config.json')
+  writeFileSync(configPath, JSON.stringify({
+    schemaVersion: 1, template: 'traditional-web',
+    standardsProfile: 'traditional-web-v2', tools: {},
+  }, null, 2) + '\n')
+  ensureTraditionalWebProjectStructure(context)
+  const envPath = join(root, 'public', '.env')
+  writeFileSync(envPath, 'DO_NOT_LEAK_PUBLIC_EXPOSURE_CONTENT')
+  const before = readFileSync(configPath)
+
+  for (const extra of [['--dry-run'], []]) {
+    const { output } = runJsonCli([
+      'upgrade-standards', '--project-root', root,
+      '--to', 'traditional-web-v3', ...extra,
+    ])
+    assert.equal(output.status, 'FAIL')
+    assert.equal(output.upgraded, false)
+    assert.deepEqual(
+      output.results.find(({ id }) => id === 'traditional-web:public-exposure')
+        .evidence.issues,
+      [{ path: 'public/.env', reason: 'environment-path-publicly-exposed' }],
+    )
+    assert.equal(JSON.stringify(output).includes('DO_NOT_LEAK'), false)
+    assert.deepEqual(readFileSync(configPath), before)
+  }
+
+  rmSync(envPath)
+  const preview = runJsonCli([
+    'upgrade-standards', '--project-root', root,
+    '--to', 'traditional-web-v3', '--dry-run',
+  ]).output
+  assert.equal(preview.status, 'PASS')
+  assert.equal(preview.upgraded, false)
+  assert.deepEqual(readFileSync(configPath), before)
+  const upgraded = runJsonCli([
+    'upgrade-standards', '--project-root', root, '--to', 'traditional-web-v3',
+  ]).output
+  assert.equal(upgraded.status, 'PASS')
+  assert.equal(upgraded.upgraded, true)
+  assert.equal(JSON.parse(readFileSync(configPath, 'utf8')).standardsProfile, 'traditional-web-v3')
+})
+
 test('init-project mínimo retorna um único JSON e persiste stores', (t) => {
   const root = createRoot(t)
   const { result, output } = runJsonCli([
@@ -304,7 +350,7 @@ test('init-project mínimo retorna um único JSON e persiste stores', (t) => {
     config: {
       schemaVersion: 1,
       template: 'traditional-web',
-      standardsProfile: 'traditional-web-v2',
+      standardsProfile: 'traditional-web-v3',
       tools: {},
     },
     state: { schemaVersion: 1 },
@@ -358,7 +404,7 @@ test('check-standards rejeita profile inválido sem modificar config', (t) => {
   const content = JSON.stringify({
     schemaVersion: 1,
     template: 'traditional-web',
-    standardsProfile: 'traditional-web-v3',
+    standardsProfile: 'traditional-web-v4',
     tools: {},
   }, null, 2) + '\n'
   writeFileSync(configPath, content, 'utf8')

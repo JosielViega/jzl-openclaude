@@ -192,3 +192,51 @@ test('aggregate ERROR do target retorna resultado e preserva Config', (t) => {
   assert.equal(result.results.at(-1).status, 'ERROR')
   assert.deepEqual(readFileSync(configPath), before)
 })
+
+test('v2 adota v3 somente após Public Exposure PASS e v1 não faz auto-chain', (t) => {
+  const project = createProject(t, { profile: 'traditional-web-v2' })
+  const envPath = join(project.root, 'public', '.env')
+  writeFileSync(envPath, 'DO_NOT_LEAK')
+  const before = readFileSync(project.configPath)
+  assert.equal(checkProjectStandards(project.context).standard, 'traditional-web-v2')
+  assert.equal(checkProjectStandards(project.context).status, 'PASS')
+
+  for (const dryRun of [true, false]) {
+    const result = upgradeProjectStandards(project.context, {
+      to: 'traditional-web-v3', dryRun,
+    })
+    assert.equal(result.status, 'FAIL')
+    assert.equal(result.upgraded, false)
+    assert.deepEqual(
+      result.results.find(({ id }) => id === 'traditional-web:public-exposure')
+        .evidence.issues,
+      [{ path: 'public/.env', reason: 'environment-path-publicly-exposed' }],
+    )
+    assert.deepEqual(readFileSync(project.configPath), before)
+  }
+
+  rmSync(envPath)
+  const preview = upgradeProjectStandards(project.context, {
+    to: 'traditional-web-v3', dryRun: true,
+  })
+  assert.equal(preview.status, 'PASS')
+  assert.equal(preview.upgraded, false)
+  assert.deepEqual(readFileSync(project.configPath), before)
+  const upgraded = upgradeProjectStandards(project.context, { to: 'traditional-web-v3' })
+  assert.equal(upgraded.status, 'PASS')
+  assert.equal(upgraded.upgraded, true)
+  assert.equal(readProjectConfigStore(project.context).standardsProfile, 'traditional-web-v3')
+  const checked = checkProjectStandards(project.context)
+  assert.equal(checked.standard, 'traditional-web-v3')
+  assert.equal(checked.results.find(
+    ({ id }) => id === 'traditional-web:public-exposure'
+  ).status, 'PASS')
+
+  const v1 = createProject(t, { profile: 'traditional-web-v1' })
+  const v1Bytes = readFileSync(v1.configPath)
+  assert.throws(
+    () => upgradeProjectStandards(v1.context, { to: 'traditional-web-v3' }),
+    { message: 'transição de standardsProfile não é suportada' },
+  )
+  assert.deepEqual(readFileSync(v1.configPath), v1Bytes)
+})

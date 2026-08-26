@@ -37,7 +37,7 @@ test('inicializa projeto traditional-web com config e state separados', (t) => {
     config: {
       schemaVersion: 1,
       template: 'traditional-web',
-      standardsProfile: 'traditional-web-v2',
+      standardsProfile: 'traditional-web-v3',
       tools: {},
     },
     state: { schemaVersion: 1 },

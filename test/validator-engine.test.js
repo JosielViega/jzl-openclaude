@@ -310,3 +310,29 @@ test('executa Source Text no engine sem short-circuit', (t) => {
     path: 'app.js', reason: 'invalid-utf8',
   }])
 })
+
+test('executa Public Exposure no engine sem short-circuit', (t) => {
+  const { context, projectRoot } = createTemporaryContext(t)
+  ensureTraditionalWebProjectStructure(context)
+  writeFileSync(join(projectRoot, 'public', '.env'), 'DO_NOT_LEAK')
+  const validation = runProjectValidators(context, [
+    { id: 'traditional-web:structure', type: 'traditional-web-structure' },
+    { id: 'traditional-web:public-exposure', type: 'traditional-web-public-exposure' },
+    createValidator('command-pass', ''),
+  ])
+  assert.equal(validation.status, 'FAIL')
+  assert.deepEqual(validation.results.map(({ status }) => status), ['PASS', 'FAIL', 'PASS'])
+  assert.deepEqual(validation.results[1].evidence.issues, [{
+    path: 'public/.env', reason: 'environment-path-publicly-exposed',
+  }])
+
+  const errored = runProjectValidators(context, [
+    { id: 'traditional-web:public-exposure', type: 'traditional-web-public-exposure' },
+    {
+      id: 'command-error', type: 'command',
+      executable: join(projectRoot, 'missing.exe'), args: [],
+    },
+  ])
+  assert.equal(errored.status, 'ERROR')
+  assert.deepEqual(errored.results.map(({ status }) => status), ['FAIL', 'ERROR'])
+})

@@ -294,6 +294,27 @@ test('aceita somente Source Text FAIL válido no Handoff', () => {
   })))
 })
 
+test('aceita somente Public Exposure FAIL válido no Handoff', () => {
+  const exposure = failedValidator({
+    id: 'traditional-web:public-exposure',
+    evidence: {
+      exitCode: null, signal: null, stdout: '', stderr: '', errorMessage: null,
+      standardType: 'public-exposure',
+      issues: [{ path: 'public/vendor', reason: 'dependency-path-publicly-exposed' }],
+    },
+  })
+  const value = validHandoff({ payload: { failedValidators: [exposure] } })
+  assert.strictEqual(validateHandoff(value), value)
+  for (const changed of [
+    { ...exposure, status: 'ERROR' },
+    { ...exposure, id: 'traditional-web:source-text' },
+    { ...exposure, evidence: { ...exposure.evidence, issues: [] } },
+    { ...exposure, evidence: { ...exposure.evidence, issues: [{ path: 'public/x', reason: 'other' }] } },
+  ]) assert.throws(() => validateHandoff(validHandoff({
+    payload: { failedValidators: [changed] },
+  })))
+})
+
 test('rejeita evidence incoerente de criterion no handoff', () => {
   const value = validHandoff({
     payload: { failedValidators: [{

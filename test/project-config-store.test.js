@@ -42,7 +42,7 @@ test('inicializa configuração mínima separada do State Store', (t) => {
   })
 
   assert.equal(result, realpathSync.native(configPath))
-  assert.equal(readFileSync(configPath, 'utf8'), '{\n  "schemaVersion": 1,\n  "template": "traditional-web",\n  "standardsProfile": "traditional-web-v2",\n  "tools": {}\n}\n')
+  assert.equal(readFileSync(configPath, 'utf8'), '{\n  "schemaVersion": 1,\n  "template": "traditional-web",\n  "standardsProfile": "traditional-web-v3",\n  "tools": {}\n}\n')
   assert.equal(existsSync(join(root, '.jzl', 'state.json')), false)
   assert.equal(readFileSync(configPath, 'utf8').includes('projectRoot'), false)
   assert.deepEqual(readdirSync(join(root, '.jzl')), ['config.json'])
@@ -59,7 +59,7 @@ test('inicializa configuração com PHP', (t) => {
   assert.deepEqual(readProjectConfigStore(context), {
     schemaVersion: 1,
     template: 'traditional-web',
-    standardsProfile: 'traditional-web-v2',
+    standardsProfile: 'traditional-web-v3',
     tools: { php: { executable: process.execPath, argsPrefix: [] } },
   })
 })
@@ -123,7 +123,7 @@ test('preserva profile explícito e rejeita profile inválido na leitura', (t) =
   assert.deepEqual(JSON.parse(readFileSync(configPath, 'utf8')), pinned)
 
   writeFileSync(configPath, JSON.stringify({
-    ...pinned, standardsProfile: 'traditional-web-v3',
+    ...pinned, standardsProfile: 'traditional-web-v4',
   }), 'utf8')
   assert.throws(() => readProjectConfigStore(context), {
     message: 'standardsProfile da configuração do projeto não é suportado para o template',

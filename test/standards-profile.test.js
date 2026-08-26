@@ -9,15 +9,20 @@ import {
   resolveLegacyStandardsProfile,
 } from '../src/standards-profile.js'
 
-test('registra explicitamente somente upgrade traditional-web v1 para v2', () => {
+test('registra explicitamente somente upgrades sequenciais traditional-web', () => {
   assert.equal(isStandardsProfileUpgradeSupported(
     'traditional-web', 'traditional-web-v1', 'traditional-web-v2'
+  ), true)
+  assert.equal(isStandardsProfileUpgradeSupported(
+    'traditional-web', 'traditional-web-v2', 'traditional-web-v3'
   ), true)
   for (const [template, from, to] of [
     ['traditional-web', 'traditional-web-v2', 'traditional-web-v1'],
     ['traditional-web', 'traditional-web-v1', 'traditional-web-v1'],
     ['traditional-web', 'traditional-web-v2', 'traditional-web-v2'],
     ['traditional-web', 'traditional-web-v1', 'traditional-web-v3'],
+    ['traditional-web', 'traditional-web-v3', 'traditional-web-v2'],
+    ['traditional-web', 'traditional-web-v3', 'traditional-web-v3'],
     ['other', 'traditional-web-v1', 'traditional-web-v2'],
   ]) assert.equal(isStandardsProfileUpgradeSupported(template, from, to), false)
 })
@@ -25,13 +30,14 @@ test('registra explicitamente somente upgrade traditional-web v1 para v2', () =>
 test('suporta somente os profiles traditional-web versionados conhecidos', () => {
   assert.equal(isStandardsProfileSupported('traditional-web', 'traditional-web-v1'), true)
   assert.equal(isStandardsProfileSupported('traditional-web', 'traditional-web-v2'), true)
-  assert.equal(isStandardsProfileSupported('traditional-web', 'traditional-web-v3'), false)
+  assert.equal(isStandardsProfileSupported('traditional-web', 'traditional-web-v3'), true)
+  assert.equal(isStandardsProfileSupported('traditional-web', 'traditional-web-v4'), false)
   assert.equal(isStandardsProfileSupported('traditional-web', 'traditional-web-v10'), false)
   assert.equal(isStandardsProfileSupported('other', 'traditional-web-v1'), false)
 })
 
 test('resolve o profile inicial de novos projetos', () => {
-  assert.equal(resolveInitialStandardsProfile('traditional-web'), 'traditional-web-v2')
+  assert.equal(resolveInitialStandardsProfile('traditional-web'), 'traditional-web-v3')
   assert.throws(() => resolveInitialStandardsProfile('other'), {
     message: 'template não possui standardsProfile inicial registrado',
   })
@@ -63,7 +69,7 @@ test('resolve config explícita e config legacy sem mutar', () => {
 
 test('falha fechado para profile explícito não suportado', () => {
   assert.throws(() => resolveConfiguredStandardsProfile({
-    template: 'traditional-web', standardsProfile: 'traditional-web-v3',
+    template: 'traditional-web', standardsProfile: 'traditional-web-v4',
   }), {
     message: 'standardsProfile configurado não é suportado para o template',
   })

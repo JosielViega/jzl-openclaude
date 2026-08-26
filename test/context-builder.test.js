@@ -469,3 +469,25 @@ test('preserva issues de Source Text como clone redigido sem mutar Handoff', (t)
   assert.notStrictEqual(evidence.issues[0], sourceTextValidator.evidence.issues[0])
   assert.deepEqual(raw, snapshot)
 })
+
+test('preserva issues de Public Exposure como clone sem mutar Handoff', (t) => {
+  const context = createContext(t)
+  const exposure = {
+    id: 'traditional-web:public-exposure', status: 'FAIL',
+    evidence: {
+      exitCode: null, signal: null, stdout: '', stderr: '', errorMessage: null,
+      standardType: 'public-exposure',
+      issues: [{ path: 'public/.env', reason: 'environment-path-publicly-exposed' }],
+    },
+  }
+  const raw = handoff({ payload: { failedValidators: [exposure] } })
+  const snapshot = structuredClone(raw)
+  const built = buildMissionExecutionContext(context, {
+    mission: mission(), standards: standards(), handoff: raw,
+  })
+  const evidence = built.handoff.payload.failedValidators[0].evidence
+  assert.deepEqual(evidence, exposure.evidence)
+  assert.notStrictEqual(evidence.issues, exposure.evidence.issues)
+  assert.notStrictEqual(evidence.issues[0], exposure.evidence.issues[0])
+  assert.deepEqual(raw, snapshot)
+})

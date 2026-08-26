@@ -18,10 +18,11 @@ test('verifica standards sem persistir estado e detecta JavaScript inválido', (
   writeFileSync(join(root, 'public', 'assets', 'js', 'invalid.js'), 'const =')
 
   const result = checkProjectStandards(context)
-  assert.equal(result.standard, 'traditional-web-v2')
+  assert.equal(result.standard, 'traditional-web-v3')
   assert.equal(result.status, 'FAIL')
   assert.deepEqual(result.results.map(({ id }) => id), [
     'traditional-web:structure',
+    'traditional-web:public-exposure',
     'traditional-web:ascii-paths',
     'traditional-web:source-text',
     'js-syntax:public/assets/js/invalid.js',
@@ -35,7 +36,7 @@ test('projeto vazio passa somente pelo standard ASCII sem exigir State', (t) => 
   initializeProjectConfigStore(context, { template: 'traditional-web', tools: {} })
   ensureTraditionalWebProjectStructure(context)
   assert.deepEqual(checkProjectStandards(context), {
-    standard: 'traditional-web-v2',
+    standard: 'traditional-web-v3',
     status: 'PASS',
     results: [{
       id: 'traditional-web:structure',
@@ -43,6 +44,13 @@ test('projeto vazio passa somente pelo standard ASCII sem exigir State', (t) => 
       evidence: {
         exitCode: null, signal: null, stdout: '', stderr: '', errorMessage: null,
         standardType: 'structure', issues: [],
+      },
+    }, {
+      id: 'traditional-web:public-exposure',
+      status: 'PASS',
+      evidence: {
+        exitCode: null, signal: null, stdout: '', stderr: '', errorMessage: null,
+        standardType: 'public-exposure', issues: [],
       },
     }, {
       id: 'traditional-web:ascii-paths',
@@ -117,7 +125,7 @@ test('legacy e pinned são equivalentes e profile inválido falha sem mutação'
   const invalidPath = join(roots[1].root, '.jzl', 'config.json')
   writeFileSync(invalidPath, JSON.stringify({
     schemaVersion: 1, template: 'traditional-web',
-    standardsProfile: 'traditional-web-v3', tools: {},
+    standardsProfile: 'traditional-web-v4', tools: {},
   }))
   const invalidBytes = readFileSync(invalidPath)
   assert.throws(() => checkProjectStandards(roots[1].context), {
@@ -180,4 +188,50 @@ test('v2 separa encoding de sintaxe JavaScript', (t) => {
   writeFileSync(target, Buffer.from([0xff]))
   result = checkProjectStandards(context)
   assert.equal(result.results.find(({ id }) => id === 'traditional-web:source-text').status, 'FAIL')
+})
+
+test('Public Exposure pertence somente ao v3 e preserva v1 e v2 congelados', (t) => {
+  for (const profile of ['traditional-web-v1', 'traditional-web-v2', 'traditional-web-v3']) {
+    const root = mkdtempSync(join(tmpdir(), `jzl-exposure-pinning-${profile}-`))
+    t.after(() => rmSync(root, { recursive: true, force: true }))
+    const context = createProjectContext(root)
+    mkdirSync(join(root, '.jzl'))
+    writeFileSync(join(root, '.jzl', 'config.json'), JSON.stringify({
+      schemaVersion: 1, template: 'traditional-web', standardsProfile: profile, tools: {},
+    }, null, 2) + '\n')
+    ensureTraditionalWebProjectStructure(context)
+    writeFileSync(join(root, 'public', '.env'), 'DO_NOT_LEAK')
+
+    const result = checkProjectStandards(context)
+    const exposure = result.results.find(({ id }) => id === 'traditional-web:public-exposure')
+    if (profile === 'traditional-web-v3') {
+      assert.equal(result.status, 'FAIL')
+      assert.deepEqual(exposure.evidence.issues, [{
+        path: 'public/.env', reason: 'environment-path-publicly-exposed',
+      }])
+    } else {
+      assert.equal(result.status, 'PASS')
+      assert.equal(exposure, undefined)
+    }
+  }
+})
+
+test('public ausente ou inválido mantém Exposure PASS e aggregate Structure FAIL', (t) => {
+  for (const mode of ['missing', 'file']) {
+    const root = mkdtempSync(join(tmpdir(), `jzl-exposure-root-${mode}-`))
+    t.after(() => rmSync(root, { recursive: true, force: true }))
+    const context = createProjectContext(root)
+    mkdirSync(join(root, '.jzl'))
+    writeFileSync(join(root, '.jzl', 'config.json'), JSON.stringify({
+      schemaVersion: 1, template: 'traditional-web',
+      standardsProfile: 'traditional-web-v3', tools: {},
+    }, null, 2) + '\n')
+    if (mode === 'file') writeFileSync(join(root, 'public'), '')
+    const result = checkProjectStandards(context)
+    assert.equal(result.status, 'FAIL')
+    assert.equal(result.results[0].id, 'traditional-web:structure')
+    assert.equal(result.results[0].status, 'FAIL')
+    assert.equal(result.results[1].id, 'traditional-web:public-exposure')
+    assert.equal(result.results[1].status, 'PASS')
+  }
 })

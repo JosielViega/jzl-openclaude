@@ -23,6 +23,10 @@ import {
   runTraditionalWebSourceTextValidator,
   validateTraditionalWebSourceTextValidator,
 } from './traditional-web-source-text-validator.js'
+import {
+  runTraditionalWebPublicExposureValidator,
+  validateTraditionalWebPublicExposureValidator,
+} from './traditional-web-public-exposure-validator.js'
 
 function validateValidatorDefinition(validator) {
   if (validator === null || typeof validator !== 'object' || Array.isArray(validator)) {
@@ -62,6 +66,11 @@ function validateValidatorDefinition(validator) {
 
     if (validator.type === 'traditional-web-source-text') {
       validateTraditionalWebSourceTextValidator(validator)
+      return
+    }
+
+    if (validator.type === 'traditional-web-public-exposure') {
+      validateTraditionalWebPublicExposureValidator(validator)
       return
     }
 
@@ -212,6 +221,8 @@ export function runProjectValidators(context, validators) {
           ? runTraditionalWebAsciiPathsValidator(context, validator)
           : validator.type === 'traditional-web-source-text'
             ? runTraditionalWebSourceTextValidator(context, validator)
+          : validator.type === 'traditional-web-public-exposure'
+            ? runTraditionalWebPublicExposureValidator(context, validator)
           : validator.type === 'traditional-web-structure'
             ? runTraditionalWebStructureValidator(context, validator)
       : runMissionAcceptanceCriterion(context, validator)

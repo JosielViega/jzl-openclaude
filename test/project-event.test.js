@@ -593,6 +593,37 @@ test('aceita evidence Source Text PASS, FAIL e ERROR sem conteúdo', () => {
   })))
 })
 
+test('aceita evidence Public Exposure PASS, FAIL e ERROR sem conteúdo', () => {
+  const issue = {
+    path: 'public/.env', reason: 'environment-path-publicly-exposed',
+  }
+  for (const [status, toStatus, issues, errorMessage] of [
+    ['PASS', 'completed', [], null],
+    ['FAIL', 'correction', [issue], null],
+    ['ERROR', 'validation', [], 'falha de filesystem'],
+  ]) {
+    const value = validation(status, toStatus, {
+      results: [{
+        id: 'traditional-web:public-exposure', status,
+        evidence: evidence({
+          exitCode: null, standardType: 'public-exposure', issues, errorMessage,
+        }),
+      }],
+    })
+    assert.strictEqual(validateProjectEvent(value), value)
+  }
+  for (const issues of [
+    [], [issue, issue],
+    [{ path: 'public/b/.env', reason: issue.reason }, { path: 'public/a/.env', reason: issue.reason }],
+    [{ path: 'public/.env', reason: 'other' }],
+  ]) assert.throws(() => validateProjectEvent(validation('FAIL', 'correction', {
+    results: [{
+      id: 'traditional-web:public-exposure', status: 'FAIL',
+      evidence: evidence({ exitCode: null, standardType: 'public-exposure', issues }),
+    }],
+  })))
+})
+
 test('rejeita metadata cruzada entre Structure, ASCII, criterion e scope', () => {
   const base = {
     exitCode: null, signal: null, stdout: '', stderr: '', errorMessage: null,
