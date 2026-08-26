@@ -8,12 +8,18 @@ import {
   readProjectStateStore,
 } from './project-state-store.js'
 import { initializeProjectEventStore } from './project-event-store.js'
+import {
+  ensureTraditionalWebProjectStructure,
+  preflightTraditionalWebProjectStructure,
+} from './traditional-web-structure.js'
 
 export function initializeManagedProject(context, input) {
   createProjectConfig(input)
+  preflightTraditionalWebProjectStructure(context)
   initializeProjectConfigStore(context, input)
   initializeProjectStateStore(context)
   initializeProjectEventStore(context)
+  ensureTraditionalWebProjectStructure(context)
 
   return {
     projectRoot: context.projectRoot,

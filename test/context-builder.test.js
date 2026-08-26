@@ -427,3 +427,23 @@ test('preserva evidence do standard ASCII como clone contextual', (t) => {
     standardValidator.evidence.violations,
   )
 })
+
+test('preserva issues de Structure como objetos clonados', (t) => {
+  const context = createContext(t)
+  const structureValidator = {
+    id: 'traditional-web:structure', status: 'FAIL',
+    evidence: {
+      exitCode: null, signal: null, stdout: '', stderr: '', errorMessage: null,
+      standardType: 'structure',
+      issues: [{ path: 'js/app.js', reason: 'javascript-outside-public-assets-js' }],
+    },
+  }
+  const raw = handoff({ payload: { failedValidators: [structureValidator] } })
+  const built = buildMissionExecutionContext(context, {
+    mission: mission(), standards: standards(), handoff: raw,
+  })
+  const evidence = built.handoff.payload.failedValidators[0].evidence
+  assert.deepEqual(evidence, structureValidator.evidence)
+  assert.notStrictEqual(evidence.issues, structureValidator.evidence.issues)
+  assert.notStrictEqual(evidence.issues[0], structureValidator.evidence.issues[0])
+})

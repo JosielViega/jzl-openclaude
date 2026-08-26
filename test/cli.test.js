@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
 import {
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -23,6 +24,7 @@ import {
   readProjectStateStore,
   writeProjectStateStore,
 } from '../src/project-state-store.js'
+import { ensureTraditionalWebProjectStructure } from '../src/traditional-web-structure.js'
 
 const testDirectory = dirname(fileURLToPath(import.meta.url))
 const cliPath = join(testDirectory, '..', 'src', 'cli.js')
@@ -59,8 +61,10 @@ function initProject(root, extraArguments = []) {
 function createValidationProject(t, mode) {
   const root = createRoot(t)
   const context = createProjectContext(root)
-  const fakePhpPath = join(root, 'fake-php.js')
-  const phpPath = join(root, 'index.php')
+  ensureTraditionalWebProjectStructure(context)
+  mkdirSync(join(root, 'node_modules'))
+  const fakePhpPath = join(root, 'node_modules', 'fake-php.js')
+  const phpPath = join(root, 'public', 'index.php')
   const mission = {
     id: 'mission-0001',
     title: 'Validar PHP',
@@ -70,7 +74,7 @@ function createValidationProject(t, mode) {
     acceptanceCriteria: [{
       id: 'criterion-0001',
       type: 'file-exists',
-      path: 'index.php',
+      path: 'public/index.php',
     }],
   }
 
@@ -117,13 +121,14 @@ test('check-standards retorna PASS ou FAIL com exit zero sem criar State/Event S
     template: 'traditional-web',
     tools: {},
   })
-  writeFileSync(join(root, 'index.js'), 'export const value = 1\n')
+  ensureTraditionalWebProjectStructure(createProjectContext(root))
+  writeFileSync(join(root, 'public', 'assets', 'js', 'index.js'), 'export const value = 1\n')
 
   const passed = runJsonCli(['check-standards', '--project-root', root])
   assert.equal(passed.output.standard, 'traditional-web-v1')
   assert.equal(passed.output.status, 'PASS')
 
-  writeFileSync(join(root, 'index.js'), 'const =')
+  writeFileSync(join(root, 'public', 'assets', 'js', 'index.js'), 'const =')
   const failed = runJsonCli(['check-standards', '--project-root', root])
   assert.equal(failed.output.status, 'FAIL')
   assert.equal(existsSync(join(root, '.jzl', 'state.json')), false)
@@ -136,11 +141,15 @@ test('check-standards reporta path Unicode como FAIL com exit zero', (t) => {
     template: 'traditional-web',
     tools: {},
   })
-  writeFileSync(join(root, 'ação.js'), 'export const value = 1\n')
+  ensureTraditionalWebProjectStructure(createProjectContext(root))
+  writeFileSync(join(root, 'public', 'assets', 'js', 'ação.js'), 'export const value = 1\n')
 
   const { output } = runJsonCli(['check-standards', '--project-root', root])
   assert.equal(output.status, 'FAIL')
-  assert.deepEqual(output.results[0].evidence.violations, ['ação.js'])
+  assert.deepEqual(
+    output.results.find(({ id }) => id === 'traditional-web:ascii-paths').evidence.violations,
+    ['public/assets/js/ação.js'],
+  )
 })
 
 test('check-standards valida opções e falha na preparação sem PHP configurado', (t) => {
@@ -183,6 +192,58 @@ test('init-project mínimo retorna um único JSON e persiste stores', (t) => {
     state: { schemaVersion: 1 },
   })
   assert.equal(result.stdout.trim().split(/\r?\n/).length, 1)
+  for (const projectPath of [
+    'public', 'public/assets', 'public/assets/css', 'public/assets/js',
+    'public/assets/images', 'src',
+  ]) {
+    assert.equal(existsSync(join(root, ...projectPath.split('/'))), true)
+  }
+  assert.equal(existsSync(join(root, 'database')), false)
+  assert.equal(existsSync(join(root, 'public', 'index.php')), false)
+
+  const storePaths = ['config.json', 'state.json', 'events.json']
+  const storesBefore = storePaths.map((name) => readFileSync(join(root, '.jzl', name)))
+  rmSync(join(root, 'public', 'assets', 'images'), { recursive: true })
+  const rerun = runCli([
+    'init-project', '--project-root', root, '--template', 'traditional-web',
+  ])
+  assert.equal(rerun.status, 0)
+  assert.equal(existsSync(join(root, 'public', 'assets', 'images')), true)
+  assert.deepEqual(
+    storePaths.map((name) => readFileSync(join(root, '.jzl', name))),
+    storesBefore,
+  )
+})
+
+test('init-project rejeita conflito estrutural antes de criar Stores', (t) => {
+  const root = createRoot(t)
+  writeFileSync(join(root, 'public'), '')
+
+  const result = runCli([
+    'init-project', '--project-root', root, '--template', 'traditional-web',
+  ])
+
+  assert.equal(result.status, 1)
+  assert.equal(result.stderr.trim(), 'estrutura traditional-web requer diretório real: public')
+  assert.equal(existsSync(join(root, '.jzl')), false)
+  assert.equal(existsSync(join(root, 'src')), false)
+})
+
+test('check-standards reporta scaffold ausente sem modificar o projeto', (t) => {
+  const root = createRoot(t)
+  initializeProjectConfigStore(createProjectContext(root), {
+    template: 'traditional-web', tools: {},
+  })
+  const before = readFileSync(join(root, '.jzl', 'config.json'))
+
+  const { result, output } = runJsonCli(['check-standards', '--project-root', root])
+
+  assert.equal(result.status, 0)
+  assert.equal(output.status, 'FAIL')
+  assert.equal(output.results[0].id, 'traditional-web:structure')
+  assert.equal(output.results[0].status, 'FAIL')
+  assert.equal(existsSync(join(root, 'public')), false)
+  assert.deepEqual(readFileSync(join(root, '.jzl', 'config.json')), before)
 })
 
 test('create-mission aceita Change Scope JSON estrito inclusive vazio', (t) => {

@@ -2,6 +2,7 @@ import { validateMissionReviewResult } from './mission-review-result.js'
 import { validateMissionPlanningResult } from './mission-planning-result.js'
 import { isMissionAcceptanceCriterionType } from './mission-acceptance-criterion.js'
 import { validateExecutionChangeSet } from './execution-change-set.js'
+import { validateTraditionalWebStructureIssue } from './traditional-web-structure.js'
 
 const missionIdPattern = /^mission-\d{4,}$/
 const eventIdPattern = /^event-\d{6,}$/
@@ -59,36 +60,58 @@ function validateEvidence(validator) {
   const scopePresent = Object.hasOwn(evidence, 'scopeType')
     ? scopeFields.filter(field => Object.hasOwn(evidence, field))
     : []
-  const standardFields = ['standardType', 'violations']
   const standardPresent = Object.hasOwn(evidence, 'standardType')
-    ? standardFields.filter(field => Object.hasOwn(evidence, field))
-    : []
 
   if (
-    [present.length > 0, scopePresent.length > 0, standardPresent.length > 0]
+    [present.length > 0, scopePresent.length > 0, standardPresent]
       .filter(Boolean).length > 1
   ) {
     throw new Error('metadata de validator na evidence é ambígua')
   }
 
-  if (standardPresent.length > 0) {
+  if (standardPresent) {
     if (
-      standardPresent.length !== standardFields.length
-      || validator.id !== 'traditional-web:ascii-paths'
-      || validator.status !== 'FAIL'
-      || evidence.standardType !== 'ascii-paths'
+      validator.status !== 'FAIL'
       || evidence.exitCode !== null
       || evidence.signal !== null
       || evidence.stdout !== ''
       || evidence.stderr !== ''
       || evidence.errorMessage !== null
-      || !Array.isArray(evidence.violations)
-      || evidence.violations.length === 0
-      || !evidence.violations.every(isStandardViolationPath)
-      || new Set(evidence.violations).size !== evidence.violations.length
-      || [...evidence.violations].sort().some(
-        (path, index) => path !== evidence.violations[index]
-      )
+    ) {
+      throw new Error('evidence do standard do handoff é inválida')
+    }
+
+    if (evidence.standardType === 'ascii-paths') {
+      if (
+        validator.id !== 'traditional-web:ascii-paths'
+        || Object.hasOwn(evidence, 'issues')
+        || !Array.isArray(evidence.violations)
+        || evidence.violations.length === 0
+        || !evidence.violations.every(isStandardViolationPath)
+        || new Set(evidence.violations).size !== evidence.violations.length
+        || [...evidence.violations].sort().some(
+          (path, index) => path !== evidence.violations[index]
+        )
+      ) {
+        throw new Error('evidence do standard do handoff é inválida')
+      }
+      return
+    }
+
+    if (
+      evidence.standardType !== 'structure'
+      || validator.id !== 'traditional-web:structure'
+      || Object.hasOwn(evidence, 'violations')
+      || !Array.isArray(evidence.issues)
+      || evidence.issues.length === 0
+    ) {
+      throw new Error('evidence do standard do handoff é inválida')
+    }
+    for (const issue of evidence.issues) validateTraditionalWebStructureIssue(issue)
+    const keys = evidence.issues.map(({ path, reason }) => `${path}\u0000${reason}`)
+    if (
+      new Set(keys).size !== keys.length
+      || [...keys].sort().some((key, index) => key !== keys[index])
     ) {
       throw new Error('evidence do standard do handoff é inválida')
     }
@@ -125,6 +148,9 @@ function validateEvidence(validator) {
       throw new Error('metadata do Change Scope no handoff é incompleta')
     }
     if (validator.id === 'traditional-web:ascii-paths') {
+      throw new Error('metadata do standard no handoff é incompleta')
+    }
+    if (validator.id === 'traditional-web:structure') {
       throw new Error('metadata do standard no handoff é incompleta')
     }
     return

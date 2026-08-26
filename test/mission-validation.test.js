@@ -31,6 +31,7 @@ import { recordMissionExecutionSuccess } from '../src/execution-history.js'
 import { resolveMissionCorrectionHandoff } from '../src/handoff-processor.js'
 import { buildMissionExecutionContext } from '../src/context-builder.js'
 import { buildMissionExecutionPrompt } from '../src/mission-execution-prompt.js'
+import { ensureTraditionalWebProjectStructure } from '../src/traditional-web-structure.js'
 
 const evidenceFields = [
   'validation',
@@ -203,7 +204,8 @@ function initializeConfiguredValidation(
   missions,
   { invalidMarker, executable = process.execPath } = {},
 ) {
-  const fakePhpPath = join(projectRoot, 'fake-php.js')
+  ensureTraditionalWebProjectStructure(context)
+  const fakePhpPath = join(projectRoot, '.jzl', 'fake-php.js')
   const markerCheck = invalidMarker === undefined
     ? ''
     : `if (content.includes(${JSON.stringify(invalidMarker)})) process.exit(1);`
@@ -214,8 +216,8 @@ function initializeConfiguredValidation(
     + markerCheck
   )
 
-  writeFileSync(fakePhpPath, script, 'utf8')
   initializeMissions(context, missions)
+  writeFileSync(fakePhpPath, script, 'utf8')
   initializeProjectConfigStore(context, {
     template: 'traditional-web',
     tools: {
@@ -445,13 +447,13 @@ test('ERROR prevalece sobre FAIL e mantém Mission em validation', async (t) => 
 test('validação configurada PHP PASS conclui e libera dependente', async (t) => {
   const { context, projectRoot } = createTemporaryContext(t)
   const missionA = createMission('mission-0001', 'validation', {
-    acceptanceCriteria: [{ id: 'criterion-0001', type: 'file-exists', path: 'index.php' }],
+    acceptanceCriteria: [{ id: 'criterion-0001', type: 'file-exists', path: 'public/index.php' }],
   })
   const missionB = createMission('mission-0002', 'pending', {
     dependencies: [missionA.id],
   })
-  writeFileSync(join(projectRoot, 'index.php'), '<?php echo "ok";', 'utf8')
   initializeConfiguredValidation(context, projectRoot, [missionA, missionB])
+  writeFileSync(join(projectRoot, 'public', 'index.php'), '<?php echo "ok";', 'utf8')
 
   const result = await validateConfiguredProjectMission(context, missionA.id)
   const state = readProjectStateStore(context)
@@ -468,10 +470,10 @@ test('validação configurada PHP FAIL solicita correction e bloqueia dependente
   const missionB = createMission('mission-0002', 'pending', {
     dependencies: [missionA.id],
   })
-  writeFileSync(join(projectRoot, 'index.php'), 'INVALID_PHP_FOR_TEST', 'utf8')
   initializeConfiguredValidation(context, projectRoot, [missionA, missionB], {
     invalidMarker: 'INVALID_PHP_FOR_TEST',
   })
+  writeFileSync(join(projectRoot, 'public', 'index.php'), 'INVALID_PHP_FOR_TEST', 'utf8')
 
   const result = await validateConfiguredProjectMission(context, missionA.id)
   const state = readProjectStateStore(context)
@@ -488,10 +490,10 @@ test('validação configurada PHP ERROR mantém Mission validation', async (t) =
   const dependent = createMission('mission-0002', 'pending', {
     dependencies: [mission.id],
   })
-  writeFileSync(join(projectRoot, 'index.php'), '<?php', 'utf8')
   initializeConfiguredValidation(context, projectRoot, [mission, dependent], {
     executable: join(projectRoot, 'missing-php.exe'),
   })
+  writeFileSync(join(projectRoot, 'public', 'index.php'), '<?php', 'utf8')
 
   const result = await validateConfiguredProjectMission(context, mission.id)
 
@@ -592,23 +594,25 @@ test('combina criteria e command com FAIL e ERROR na Mission Validation', async 
 
 test('configured HTML-only usa criteria e legacy vazio mantém unavailable', async (t) => {
   const acceptedProject = createTemporaryContext(t)
-  writeFileSync(join(acceptedProject.projectRoot, 'index.html'), 'ok')
   const acceptedMission = createMission('mission-0001', 'validation', {
-    acceptanceCriteria: [{ id: 'criterion-0001', type: 'file-exists', path: 'index.html' }],
+    acceptanceCriteria: [{ id: 'criterion-0001', type: 'file-exists', path: 'public/index.html' }],
   })
   initializeMissions(acceptedProject.context, [acceptedMission])
   initializeProjectConfigStore(acceptedProject.context, { template: 'traditional-web', tools: {} })
+  ensureTraditionalWebProjectStructure(acceptedProject.context)
+  writeFileSync(join(acceptedProject.projectRoot, 'public', 'index.html'), 'ok')
   const accepted = await validateConfiguredProjectMission(acceptedProject.context, acceptedMission.id)
   assert.equal(accepted.validation.status, 'PASS')
   assert.equal(accepted.mission.status, 'completed')
   assert.deepEqual(accepted.validation.results.map(({ id }) => id), [
-    'criterion-0001', 'traditional-web:ascii-paths',
+    'criterion-0001', 'traditional-web:structure', 'traditional-web:ascii-paths',
   ])
 
   const legacyProject = createTemporaryContext(t)
   const legacyMission = createMission('mission-0001')
   initializeMissions(legacyProject.context, [legacyMission])
   initializeProjectConfigStore(legacyProject.context, { template: 'traditional-web', tools: {} })
+  ensureTraditionalWebProjectStructure(legacyProject.context)
   await assert.rejects(
     validateConfiguredProjectMission(legacyProject.context, legacyMission.id),
     { message: 'Mission não possui validação específica suficiente para comprovar o objetivo' },
@@ -620,9 +624,10 @@ test('configured HTML-only usa criteria e legacy vazio mantém unavailable', asy
 test('standard ASCII FAIL sem prova solicita correction e alimenta Handoff', async (t) => {
   const { context, projectRoot } = createTemporaryContext(t)
   const mission = createMission('mission-0001')
-  writeFileSync(join(projectRoot, 'usuários.html'), '')
   initializeMissions(context, [mission])
   initializeProjectConfigStore(context, { template: 'traditional-web', tools: {} })
+  ensureTraditionalWebProjectStructure(context)
+  writeFileSync(join(projectRoot, 'public', 'usuários.html'), '')
 
   const result = await validateConfiguredProjectMission(context, mission.id)
   assert.equal(result.validation.status, 'FAIL')
@@ -631,7 +636,10 @@ test('standard ASCII FAIL sem prova solicita correction e alimenta Handoff', asy
 
   const handoff = resolveMissionCorrectionHandoff(context, mission.id)
   assert.equal(handoff.payload.failedValidators[0].id, 'traditional-web:ascii-paths')
-  assert.deepEqual(handoff.payload.failedValidators[0].evidence.violations, ['usuários.html'])
+  assert.deepEqual(
+    handoff.payload.failedValidators[0].evidence.violations,
+    ['public/usuários.html'],
+  )
   const executionContext = buildMissionExecutionContext(context, {
     mission: retryProjectMissionCorrection(context, mission.id),
     standards: { id: 'traditional-web-v1', instructions: ['Preserve o projeto.'] },
@@ -640,11 +648,42 @@ test('standard ASCII FAIL sem prova solicita correction e alimenta Handoff', asy
   assert.match(buildMissionExecutionPrompt(executionContext), /Traditional Web Standard:/)
 })
 
+test('Structure FAIL sem prova solicita correction e alimenta Handoff', async (t) => {
+  const { context, projectRoot } = createTemporaryContext(t)
+  const mission = createMission('mission-0001')
+  initializeMissions(context, [mission])
+  initializeProjectConfigStore(context, { template: 'traditional-web', tools: {} })
+  ensureTraditionalWebProjectStructure(context)
+  mkdirSync(join(projectRoot, 'js'))
+  writeFileSync(join(projectRoot, 'js', 'outside.js'), 'export const value = 1\n')
+
+  const result = await validateConfiguredProjectMission(context, mission.id)
+  assert.equal(result.validation.status, 'FAIL')
+  assert.equal(result.mission.status, 'correction')
+  assert.equal(result.validation.results[0].id, 'traditional-web:structure')
+  assert.deepEqual(result.validation.results[0].evidence.issues, [{
+    path: 'js/outside.js', reason: 'javascript-outside-public-assets-js',
+  }])
+
+  const handoff = resolveMissionCorrectionHandoff(context, mission.id)
+  assert.deepEqual(handoff.payload.failedValidators[0].evidence.issues, [{
+    path: 'js/outside.js', reason: 'javascript-outside-public-assets-js',
+  }])
+  const executionContext = buildMissionExecutionContext(context, {
+    mission: retryProjectMissionCorrection(context, mission.id),
+    standards: { id: 'traditional-web-v1', instructions: ['Preserve o projeto.'] },
+    handoff,
+  })
+  const prompt = buildMissionExecutionPrompt(executionContext)
+  assert.match(prompt, /js\/outside\.js/)
+  assert.match(prompt, /javascript-outside-public-assets-js/)
+})
+
 test('PHP configurado PASS sem Acceptance não comprova objetivo', async (t) => {
   const { context, projectRoot } = createTemporaryContext(t)
   const mission = createMission('mission-0001')
-  writeFileSync(join(projectRoot, 'index.php'), '<?php', 'utf8')
   initializeConfiguredValidation(context, projectRoot, [mission])
+  writeFileSync(join(projectRoot, 'public', 'index.php'), '<?php', 'utf8')
 
   await assert.rejects(validateConfiguredProjectMission(context, mission.id), {
     message: 'Mission não possui validação específica suficiente para comprovar o objetivo',
@@ -655,13 +694,14 @@ test('PHP configurado PASS sem Acceptance não comprova objetivo', async (t) => 
 test('validação configurada executa todos os PHP de primeira parte', async (t) => {
   const { context, projectRoot } = createTemporaryContext(t)
   const mission = createMission('mission-0001', 'validation', {
-    acceptanceCriteria: [{ id: 'criterion-0001', type: 'file-exists', path: 'a.php' }],
+    acceptanceCriteria: [{ id: 'criterion-0001', type: 'file-exists', path: 'public/a.php' }],
   })
   const logPath = join(projectRoot, 'executed.txt')
-  const fakePhpPath = join(projectRoot, 'fake-php.js')
-  writeFileSync(join(projectRoot, 'a.php'), '<?php', 'utf8')
-  writeFileSync(join(projectRoot, 'b.php'), '<?php', 'utf8')
   initializeMissions(context, [mission])
+  ensureTraditionalWebProjectStructure(context)
+  const fakePhpPath = join(projectRoot, '.jzl', 'fake-php.js')
+  writeFileSync(join(projectRoot, 'public', 'a.php'), '<?php', 'utf8')
+  writeFileSync(join(projectRoot, 'public', 'b.php'), '<?php', 'utf8')
   writeFileSync(fakePhpPath, (
     "const fs = require('node:fs'); const path = require('node:path'); "
     + `fs.appendFileSync(${JSON.stringify(logPath)}, path.basename(process.argv.at(-1)) + '\\n');`
@@ -680,15 +720,15 @@ test('validação configurada executa todos os PHP de primeira parte', async (t)
 test('PHP inválido dentro de vendor é ignorado', async (t) => {
   const { context, projectRoot } = createTemporaryContext(t)
   const mission = createMission('mission-0001', 'validation', {
-    acceptanceCriteria: [{ id: 'criterion-0001', type: 'file-exists', path: 'index.php' }],
+    acceptanceCriteria: [{ id: 'criterion-0001', type: 'file-exists', path: 'public/index.php' }],
   })
-  writeFileSync(join(projectRoot, 'index.php'), '<?php', 'utf8')
-  const vendor = join(projectRoot, 'vendor')
-  mkdirSync(vendor)
-  writeFileSync(join(vendor, 'invalid.php'), 'INVALID_PHP_FOR_TEST', 'utf8')
   initializeConfiguredValidation(context, projectRoot, [mission], {
     invalidMarker: 'INVALID_PHP_FOR_TEST',
   })
+  writeFileSync(join(projectRoot, 'public', 'index.php'), '<?php', 'utf8')
+  const vendor = join(projectRoot, 'vendor')
+  mkdirSync(vendor)
+  writeFileSync(join(vendor, 'invalid.php'), 'INVALID_PHP_FOR_TEST', 'utf8')
 
   const result = await validateConfiguredProjectMission(context, mission.id)
   assert.equal(result.validation.status, 'PASS')
@@ -697,9 +737,10 @@ test('PHP inválido dentro de vendor é ignorado', async (t) => {
 test('PHP sem configuração mantém Mission validation', async (t) => {
   const { context, projectRoot } = createTemporaryContext(t)
   const mission = createMission('mission-0001')
-  writeFileSync(join(projectRoot, 'index.php'), '<?php', 'utf8')
   initializeMissions(context, [mission])
   initializeProjectConfigStore(context, { template: 'traditional-web' })
+  ensureTraditionalWebProjectStructure(context)
+  writeFileSync(join(projectRoot, 'public', 'index.php'), '<?php', 'utf8')
 
   await assert.rejects(validateConfiguredProjectMission(context, mission.id), {
     message: 'executable PHP não configurado para traditional-web',

@@ -252,6 +252,27 @@ test('aceita somente FAIL do standard ASCII no Handoff', () => {
   })))
 })
 
+test('aceita Structure FAIL válido e rejeita shape inválido', () => {
+  const structure = failedValidator({
+    id: 'traditional-web:structure',
+    evidence: {
+      exitCode: null, signal: null, stdout: '', stderr: '', errorMessage: null,
+      standardType: 'structure',
+      issues: [{ path: 'js/app.js', reason: 'javascript-outside-public-assets-js' }],
+    },
+  })
+  const value = validHandoff({ payload: { failedValidators: [structure] } })
+  assert.strictEqual(validateHandoff(value), value)
+  for (const changed of [
+    { ...structure, status: 'ERROR' },
+    { ...structure, id: 'traditional-web:ascii-paths' },
+    { ...structure, evidence: { ...structure.evidence, issues: [] } },
+    { ...structure, evidence: { ...structure.evidence, issues: [{ path: '../a.js', reason: 'javascript-outside-public-assets-js' }] } },
+  ]) assert.throws(() => validateHandoff(validHandoff({
+    payload: { failedValidators: [changed] },
+  })))
+})
+
 test('rejeita evidence incoerente de criterion no handoff', () => {
   const value = validHandoff({
     payload: { failedValidators: [{

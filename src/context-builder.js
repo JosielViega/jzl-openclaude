@@ -71,12 +71,20 @@ function cloneFailedValidator(result, redactProjectRoot) {
       }
   const standardEvidence = result.evidence.standardType === undefined
     ? {}
-    : {
+    : result.evidence.standardType === 'ascii-paths'
+      ? {
         standardType: result.evidence.standardType,
         violations: result.evidence.violations.map(
           path => truncateText(redactProjectRoot(path), 500),
         ),
       }
+      : {
+          standardType: result.evidence.standardType,
+          issues: result.evidence.issues.map((issue) => ({
+            path: truncateText(redactProjectRoot(issue.path), 500),
+            reason: issue.reason,
+          })),
+        }
 
   return {
     id: result.id,

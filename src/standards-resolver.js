@@ -10,6 +10,8 @@ const traditionalWebInstructions = [
   'Use somente caracteres ASCII em nomes de arquivos e diretórios.',
   'Arquivos JavaScript de primeira parte devem possuir sintaxe válida.',
   'Arquivos PHP de primeira parte devem possuir sintaxe válida.',
+  'Use a estrutura traditional-web canônica: public/ para conteúdo web, src/ para código PHP interno e database/ para SQL quando necessário.',
+  'Mantenha JavaScript em public/assets/js/, CSS em public/assets/css/, HTML em public/ e PHP em public/ ou src/.',
 ]
 
 export function resolveProjectStandards(context) {
@@ -34,6 +36,7 @@ export function resolveProjectValidators(context) {
   }
 
   return [
+    { id: 'traditional-web:structure', type: 'traditional-web-structure' },
     { id: 'traditional-web:ascii-paths', type: 'traditional-web-ascii-paths' },
     ...javascriptFiles.map(({ path }) => ({
       id: `js-syntax:${path}`,

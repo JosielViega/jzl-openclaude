@@ -4,6 +4,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -44,6 +45,11 @@ test('inicializa projeto traditional-web com config e state separados', (t) => {
     schemaVersion: 1,
     events: [],
   })
+  for (const path of [
+    'public', 'public/assets', 'public/assets/css', 'public/assets/js',
+    'public/assets/images', 'src',
+  ]) assert.equal(existsSync(join(projectRoot, ...path.split('/'))), true)
+  assert.equal(existsSync(join(projectRoot, 'database')), false)
   assert.equal(JSON.stringify(result.config).includes('projectRoot'), false)
   assert.equal(JSON.stringify(result.state).includes('projectRoot'), false)
   assert.notEqual(
@@ -86,6 +92,7 @@ test('rerun é idempotente e não sobrescreve stores existentes', (t) => {
   const configBefore = readFileSync(configPath, 'utf8')
   const stateBefore = readFileSync(statePath, 'utf8')
   const eventsBefore = readFileSync(eventsPath, 'utf8')
+  rmSync(join(projectRoot, 'public', 'assets', 'images'), { recursive: true })
 
   const result = initializeManagedProject(context, {
     template: 'traditional-web',
@@ -96,6 +103,7 @@ test('rerun é idempotente e não sobrescreve stores existentes', (t) => {
   assert.equal(readFileSync(statePath, 'utf8'), stateBefore)
   assert.equal(readFileSync(eventsPath, 'utf8'), eventsBefore)
   assert.equal(result.config.tools.php.executable, process.execPath)
+  assert.equal(existsSync(join(projectRoot, 'public', 'assets', 'images')), true)
 })
 
 test('input inválido falha antes de criar State Store', (t) => {
@@ -106,4 +114,27 @@ test('input inválido falha antes de criar State Store', (t) => {
   }), { message: 'template da configuração do projeto não é suportado' })
   assert.equal(existsSync(join(projectRoot, '.jzl', 'state.json')), false)
   assert.equal(existsSync(join(projectRoot, '.jzl', 'config.json')), false)
+  assert.equal(existsSync(join(projectRoot, 'public')), false)
+  assert.equal(existsSync(join(projectRoot, 'src')), false)
+})
+
+test('conflito estrutural falha antes de Stores ou scaffold restante', (t) => {
+  const { context, projectRoot } = createProject(t)
+  writeFileSync(join(projectRoot, 'public'), 'preservar')
+
+  assert.throws(() => initializeManagedProject(context, {
+    template: 'traditional-web',
+  }), { message: 'estrutura traditional-web requer diretório real: public' })
+  assert.equal(readFileSync(join(projectRoot, 'public'), 'utf8'), 'preservar')
+  assert.equal(existsSync(join(projectRoot, '.jzl')), false)
+  assert.equal(existsSync(join(projectRoot, 'src')), false)
+})
+
+test('init não move arquivos existentes nem cria placeholders', (t) => {
+  const { context, projectRoot } = createProject(t)
+  writeFileSync(join(projectRoot, 'index.php'), '<?php')
+  initializeManagedProject(context, { template: 'traditional-web' })
+  assert.equal(readFileSync(join(projectRoot, 'index.php'), 'utf8'), '<?php')
+  assert.equal(existsSync(join(projectRoot, 'public', 'index.php')), false)
+  assert.equal(existsSync(join(projectRoot, 'public', 'assets', 'js', 'app.js')), false)
 })

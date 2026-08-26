@@ -38,6 +38,24 @@ ${validator.evidence.satisfied}`
   }
 
   if (validator.evidence.standardType !== undefined) {
+    if (validator.evidence.standardType === 'structure') {
+      const issues = validator.evidence.issues
+        .map(({ path, reason }) => `- ${path}\n  Motivo: ${reason}`)
+        .join('\n\n')
+
+      return `Traditional Web Standard:
+${validator.id}
+
+Tipo:
+structure
+
+Problemas estruturais detectados:
+
+${issues}
+
+Esses problemas foram detectados deterministicamente pelo JZL.`
+    }
+
     const violations = validator.evidence.violations
       .map((path) => `- ${path}`)
       .join('\n')

@@ -3,6 +3,7 @@ import { isMissionAcceptanceCriterionType } from './mission-acceptance-criterion
 import { validateMissionReviewResult } from './mission-review-result.js'
 import { validateMissionPlanningResult } from './mission-planning-result.js'
 import { posix } from 'node:path'
+import { validateTraditionalWebStructureIssue } from './traditional-web-structure.js'
 
 const eventIdPattern = /^event-\d{6,}$/
 const missionIdPattern = /^mission-\d{4,}$/
@@ -214,19 +215,11 @@ function validateStandardViolationPath(value) {
 }
 
 function validateStandardEvidence(result, evidence) {
-  const fields = ['standardType', 'violations']
-  const present = Object.hasOwn(evidence, 'standardType')
-    ? fields.filter((field) => Object.hasOwn(evidence, field))
-    : []
-
-  if (present.length === 0) {
-    if (result.id === 'traditional-web:ascii-paths') {
+  if (!Object.hasOwn(evidence, 'standardType')) {
+    if (['traditional-web:ascii-paths', 'traditional-web:structure'].includes(result.id)) {
       throw new Error('metadata do standard na evidence é incompleta')
     }
     return
-  }
-  if (present.length !== fields.length) {
-    throw new Error('metadata do standard na evidence é incompleta')
   }
   if (
     Object.hasOwn(evidence, 'criterionType')
@@ -236,20 +229,46 @@ function validateStandardEvidence(result, evidence) {
   ) {
     throw new Error('metadata de validator na evidence é ambígua')
   }
-  if (
-    result.id !== 'traditional-web:ascii-paths'
-    || evidence.standardType !== 'ascii-paths'
-    || !Array.isArray(evidence.violations)
-    || !evidence.violations.every(validateStandardViolationPath)
-    || new Set(evidence.violations).size !== evidence.violations.length
-    || [...evidence.violations].sort().some((path, index) => path !== evidence.violations[index])
-  ) {
+
+  let findings
+  if (evidence.standardType === 'ascii-paths') {
+    if (
+      result.id !== 'traditional-web:ascii-paths'
+      || !Array.isArray(evidence.violations)
+      || Object.hasOwn(evidence, 'issues')
+      || !evidence.violations.every(validateStandardViolationPath)
+      || new Set(evidence.violations).size !== evidence.violations.length
+      || [...evidence.violations].sort().some(
+        (path, index) => path !== evidence.violations[index]
+      )
+    ) {
+      throw new Error('metadata do standard na evidence é inválida')
+    }
+    findings = evidence.violations
+  } else if (evidence.standardType === 'structure') {
+    if (
+      result.id !== 'traditional-web:structure'
+      || !Array.isArray(evidence.issues)
+      || Object.hasOwn(evidence, 'violations')
+    ) {
+      throw new Error('metadata do standard na evidence é inválida')
+    }
+    for (const issue of evidence.issues) validateTraditionalWebStructureIssue(issue)
+    const keys = evidence.issues.map(({ path, reason }) => `${path}\u0000${reason}`)
+    if (
+      new Set(keys).size !== keys.length
+      || [...keys].sort().some((key, index) => key !== keys[index])
+    ) {
+      throw new Error('metadata do standard na evidence é inválida')
+    }
+    findings = evidence.issues
+  } else {
     throw new Error('metadata do standard na evidence é inválida')
   }
 
   if (
-    (result.status === 'FAIL' && evidence.violations.length === 0)
-    || (result.status !== 'FAIL' && evidence.violations.length !== 0)
+    (result.status === 'FAIL' && findings.length === 0)
+    || (result.status !== 'FAIL' && findings.length !== 0)
     || evidence.exitCode !== null
     || evidence.signal !== null
     || evidence.stdout !== ''

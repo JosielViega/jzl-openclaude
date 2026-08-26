@@ -285,3 +285,23 @@ test('renderiza failed standard ASCII como diagnóstico determinístico', () => 
   assert.match(prompt, /- ação\.js/)
   assert.match(prompt, /detectados deterministicamente pelo JZL/)
 })
+
+test('renderiza Structure issues com path e reason', () => {
+  const structure = failedValidator('traditional-web:structure', {
+    exitCode: null,
+    stderr: '',
+    standardType: 'structure',
+    issues: [
+      { path: 'index.php', reason: 'php-outside-public-or-src' },
+      { path: 'js/app.js', reason: 'javascript-outside-public-assets-js' },
+    ],
+  })
+  const prompt = buildMissionExecutionPrompt(createExecutionContext(handoff({
+    payload: { failedValidators: [structure], omittedCount: 0 },
+  })))
+  assert.match(prompt, /Traditional Web Standard:\ntraditional-web:structure/)
+  assert.match(prompt, /Tipo:\nstructure/)
+  assert.match(prompt, /- index\.php\n  Motivo: php-outside-public-or-src/)
+  assert.match(prompt, /- js\/app\.js\n  Motivo: javascript-outside-public-assets-js/)
+  assert.match(prompt, /detectados deterministicamente pelo JZL/)
+})

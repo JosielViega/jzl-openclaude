@@ -32,6 +32,10 @@ Determina os padrões aplicáveis ao projeto e a uma Mission, de forma previsív
 
 No perfil `traditional-web-v1`, o JZL usa o Validator Engine para verificar deterministicamente nomes ASCII de arquivos e diretórios, sintaxe JavaScript pelo runtime Node atual e sintaxe PHP pelo executável configurado. Diretórios de controle e dependências (`.jzl`, `.git`, `.openclaude`, `vendor` e `node_modules`) são ignorados, e links simbólicos e junctions não são percorridos. Um `FAIL` pode solicitar correção, mas conformidade do projeto não equivale a cumprimento da Mission: somente Acceptance Criteria ou validators específicos fornecidos explicitamente comprovam seu objetivo; Change Scope representa autorização, não prova. A verificação ampla `check-standards` é somente leitura e não depende de Mission.
 
+O Traditional Web Structure Contract v1 exige os diretórios reais `public/`, `public/assets/`, `public/assets/css/`, `public/assets/js/`, `public/assets/images/` e `src/`; `database/` é opcional. PHP de primeira parte pertence a `public/` ou `src/`, JavaScript a `public/assets/js/`, CSS a `public/assets/css/`, HTML a `public/` e SQL a `database/`. Arquivos de extensões neutras não recebem regra de placement. Links simbólicos e junctions não satisfazem diretórios estruturais obrigatórios.
+
+`init-project` garante somente esse scaffold de diretórios e pode restaurar diretórios obrigatórios ausentes em nova execução, sem criar placeholders ou mover arquivos da aplicação. `check-standards` apenas observa e reporta a estrutura. Mesmo quando o Structure Standard passa, a conclusão de uma Mission continua exigindo prova específica de seu objetivo.
+
 ### Context Builder
 
 Constrói o contexto mínimo necessário para uma responsabilidade. Seleciona instruções, padrões, estado e artefatos relevantes sem compartilhar transcripts automaticamente.

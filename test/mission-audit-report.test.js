@@ -43,6 +43,7 @@ import {
 } from '../src/mission-engine.js'
 import { approveMissionPlan } from '../src/mission-plan-approval.js'
 import { validateConfiguredProjectMission } from '../src/mission-validation.js'
+import { ensureTraditionalWebProjectStructure } from '../src/traditional-web-structure.js'
 
 function createMission(overrides = {}) {
   return {
@@ -469,29 +470,30 @@ test('smoke determinístico deriva plan e somente o segundo ciclo concluído', a
   const projectRoot = mkdtempSync(join(tmpdir(), 'jzl-mission-report-smoke-'))
   const context = createProjectContext(projectRoot)
   t.after(() => rmSync(projectRoot, { recursive: true, force: true }))
-  writeFileSync(join(projectRoot, 'AGENTS.md'), '# Regras\n', 'utf8')
-  writeFileSync(join(projectRoot, 'index.html'), '<h1>BEFORE</h1>\n', 'utf8')
-  writeFileSync(join(projectRoot, 'config.php'), '<?php return [];\n', 'utf8')
-  const fakePhp = join(projectRoot, 'fake-php.js')
-  writeFileSync(fakePhp, 'process.exit(0)\n', 'utf8')
+  ensureTraditionalWebProjectStructure(context)
   initializeProjectStateStore(context)
+  writeFileSync(join(projectRoot, 'AGENTS.md'), '# Regras\n', 'utf8')
+  writeFileSync(join(projectRoot, 'public', 'index.html'), '<h1>BEFORE</h1>\n', 'utf8')
+  writeFileSync(join(projectRoot, 'src', 'config.php'), '<?php return [];\n', 'utf8')
+  const fakePhp = join(projectRoot, '.jzl', 'fake-php.js')
+  writeFileSync(fakePhp, 'process.exit(0)\n', 'utf8')
   initializeProjectConfigStore(context, {
     template: 'traditional-web',
     tools: { php: { executable: process.execPath, argsPrefix: [fakePhp] } },
   })
   const mission = createProjectMission(context, {
-    title: 'Report smoke', objective: 'Alterar somente index.html',
+    title: 'Report smoke', objective: 'Alterar somente public/index.html',
     acceptanceCriteria: [{
-      type: 'file-contains', path: 'index.html', text: 'AFTER_REPORT_SMOKE',
+      type: 'file-contains', path: 'public/index.html', text: 'AFTER_REPORT_SMOKE',
     }],
-    changeScope: { allowedPaths: ['index.html'] },
+    changeScope: { allowedPaths: ['public/index.html'] },
   })
   const planEvent = recordMissionPlanFinished(context, {
     missionId: mission.id,
     plan: {
       sessionId: 'session-plan-report-smoke', model: 'synthetic-planner',
-      summary: 'Alterar index.html',
-      steps: [{ title: 'Alterar', detail: 'Atualizar index', paths: ['index.html'] }],
+      summary: 'Alterar public/index.html',
+      steps: [{ title: 'Alterar', detail: 'Atualizar index', paths: ['public/index.html'] }],
       risks: [], validation: ['Validar conteúdo'],
     },
   })
@@ -507,7 +509,7 @@ test('smoke determinístico deriva plan e somente o segundo ciclo concluído', a
     execution: {
       sessionId: 'session-execution-old', model: 'synthetic-executor',
       result: 'old execution',
-      changeSet: { created: [], modified: ['index.html'], deleted: [] },
+      changeSet: { created: [], modified: ['public/index.html'], deleted: [] },
     },
   })
   submitProjectMissionForValidation(context, mission.id)
@@ -515,13 +517,13 @@ test('smoke determinístico deriva plan e somente o segundo ciclo concluído', a
   assert.equal(firstValidation.mission.status, 'correction')
 
   retryProjectMissionCorrection(context, mission.id)
-  writeFileSync(join(projectRoot, 'index.html'), '<h1>AFTER_REPORT_SMOKE</h1>\n', 'utf8')
+  writeFileSync(join(projectRoot, 'public', 'index.html'), '<h1>AFTER_REPORT_SMOKE</h1>\n', 'utf8')
   const currentExecution = recordMissionExecutionSuccess(context, {
     missionId: mission.id, fromStatus: 'correction',
     execution: {
       sessionId: 'session-execution-current', model: 'synthetic-executor',
       result: 'current execution',
-      changeSet: { created: [], modified: ['index.html'], deleted: [] },
+      changeSet: { created: [], modified: ['public/index.html'], deleted: [] },
     },
   })
   submitProjectMissionForValidation(context, mission.id)
@@ -545,7 +547,7 @@ test('smoke determinístico deriva plan e somente o segundo ciclo concluído', a
   assert.equal(report.planning.approval.eventId, approvalEvent.id)
   assert.equal(report.currentCycle.execution.eventId, currentExecution.id)
   assert.equal(report.currentCycle.execution.sessionId, 'session-execution-current')
-  assert.deepEqual(report.currentCycle.execution.changeSet.modified, ['index.html'])
+  assert.deepEqual(report.currentCycle.execution.changeSet.modified, ['public/index.html'])
   assert.equal(report.currentCycle.validation.outcome, 'PASS')
   assert.equal(report.currentCycle.review.eventId, reviewEvent.id)
   assert.equal(report.currentCycle.review.sessionId, 'session-review-current')

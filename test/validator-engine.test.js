@@ -6,6 +6,7 @@ import { test } from 'node:test'
 
 import { createProjectContext } from '../src/project-context.js'
 import { runProjectValidators } from '../src/validator-engine.js'
+import { ensureTraditionalWebProjectStructure } from '../src/traditional-web-structure.js'
 
 function createTemporaryContext(t) {
   const projectRoot = mkdtempSync(join(tmpdir(), 'jzl-validator-engine-'))
@@ -276,5 +277,22 @@ test('executa standard ASCII no mesmo engine e preserva ordem', (t) => {
   assert.deepEqual(validation.results.map(({ id }) => id), [
     'traditional-web:ascii-paths',
     'command-pass',
+  ])
+})
+
+test('executa Structure e ASCII no mesmo engine sem subprocesso', (t) => {
+  const { context } = createTemporaryContext(t)
+  const structure = { id: 'traditional-web:structure', type: 'traditional-web-structure' }
+  const ascii = { id: 'traditional-web:ascii-paths', type: 'traditional-web-ascii-paths' }
+  const failed = runProjectValidators(context, [structure, ascii])
+  assert.equal(failed.status, 'FAIL')
+  assert.equal(failed.results[0].status, 'FAIL')
+  assert.equal(failed.results[1].status, 'PASS')
+
+  ensureTraditionalWebProjectStructure(context)
+  const passed = runProjectValidators(context, [structure, ascii])
+  assert.equal(passed.status, 'PASS')
+  assert.deepEqual(passed.results.map(({ id }) => id), [
+    'traditional-web:structure', 'traditional-web:ascii-paths',
   ])
 })

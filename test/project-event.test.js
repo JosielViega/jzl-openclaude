@@ -531,3 +531,66 @@ test('aceita evidence do standard ASCII e rejeita metadata incoerente', () => {
     }],
   })))
 })
+
+test('aceita evidence Structure PASS, FAIL e ERROR e rejeita issues inválidos', () => {
+  const issue = { path: 'js/app.js', reason: 'javascript-outside-public-assets-js' }
+  for (const [status, toStatus, issues, errorMessage] of [
+    ['PASS', 'completed', [], null],
+    ['FAIL', 'correction', [issue], null],
+    ['ERROR', 'validation', [], 'falha de filesystem'],
+  ]) {
+    const value = validation(status, toStatus, {
+      results: [{
+        id: 'traditional-web:structure', status,
+        evidence: evidence({
+          exitCode: null, standardType: 'structure', issues, errorMessage,
+        }),
+      }],
+    })
+    assert.strictEqual(validateProjectEvent(value), value)
+  }
+
+  for (const issues of [
+    [],
+    [issue, issue],
+    [{ path: 'b.js', reason: issue.reason }, { path: 'a.js', reason: issue.reason }],
+    [{ path: 'a.js', reason: 'other' }],
+  ]) assert.throws(() => validateProjectEvent(validation('FAIL', 'correction', {
+    results: [{
+      id: 'traditional-web:structure', status: 'FAIL',
+      evidence: evidence({ exitCode: null, standardType: 'structure', issues }),
+    }],
+  })))
+})
+
+test('rejeita metadata cruzada entre Structure, ASCII, criterion e scope', () => {
+  const base = {
+    exitCode: null, signal: null, stdout: '', stderr: '', errorMessage: null,
+  }
+  for (const result of [
+    {
+      id: 'traditional-web:structure', status: 'FAIL',
+      evidence: { ...base, standardType: 'structure', issues: [{
+        path: 'a.js', reason: 'javascript-outside-public-assets-js',
+      }], violations: ['a.js'] },
+    },
+    {
+      id: 'traditional-web:ascii-paths', status: 'FAIL',
+      evidence: { ...base, standardType: 'ascii-paths', violations: ['ação.js'], issues: [] },
+    },
+    {
+      id: 'traditional-web:structure', status: 'FAIL',
+      evidence: { ...base, standardType: 'structure', issues: [{
+        path: 'a.js', reason: 'javascript-outside-public-assets-js',
+      }], criterionType: 'file-exists', path: 'a.js', satisfied: false },
+    },
+    {
+      id: 'traditional-web:structure', status: 'FAIL',
+      evidence: { ...base, standardType: 'structure', issues: [{
+        path: 'a.js', reason: 'javascript-outside-public-assets-js',
+      }], scopeType: 'allowed-paths' },
+    },
+  ]) assert.throws(() => validateProjectEvent(validation('FAIL', 'correction', {
+    results: [result],
+  })))
+})
