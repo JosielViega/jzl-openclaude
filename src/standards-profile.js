@@ -1,9 +1,9 @@
 const supportedProfiles = new Map([
-  ['traditional-web', new Set(['traditional-web-v1'])],
+  ['traditional-web', new Set(['traditional-web-v1', 'traditional-web-v2'])],
 ])
 
 const initialProfiles = new Map([
-  ['traditional-web', 'traditional-web-v1'],
+  ['traditional-web', 'traditional-web-v2'],
 ])
 
 const legacyProfiles = new Map([

@@ -273,6 +273,27 @@ test('aceita Structure FAIL válido e rejeita shape inválido', () => {
   })))
 })
 
+test('aceita somente Source Text FAIL válido no Handoff', () => {
+  const sourceText = failedValidator({
+    id: 'traditional-web:source-text',
+    evidence: {
+      exitCode: null, signal: null, stdout: '', stderr: '', errorMessage: null,
+      standardType: 'source-text',
+      issues: [{ path: 'public/assets/css/app.css', reason: 'invalid-utf8' }],
+    },
+  })
+  const value = validHandoff({ payload: { failedValidators: [sourceText] } })
+  assert.strictEqual(validateHandoff(value), value)
+  for (const changed of [
+    { ...sourceText, status: 'ERROR' },
+    { ...sourceText, id: 'traditional-web:structure' },
+    { ...sourceText, evidence: { ...sourceText.evidence, issues: [] } },
+    { ...sourceText, evidence: { ...sourceText.evidence, issues: [{ path: 'a.js', reason: 'other' }] } },
+  ]) assert.throws(() => validateHandoff(validHandoff({
+    payload: { failedValidators: [changed] },
+  })))
+})
+
 test('rejeita evidence incoerente de criterion no handoff', () => {
   const value = validHandoff({
     payload: { failedValidators: [{

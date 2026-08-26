@@ -40,17 +40,27 @@ function createLegacyProject(t) {
   return { context, root }
 }
 
+function createPinnedV1Project(t) {
+  const project = createLegacyProject(t)
+  const configPath = join(project.root, '.jzl', 'config.json')
+  writeFileSync(configPath, JSON.stringify({
+    schemaVersion: 1, template: 'traditional-web',
+    standardsProfile: 'traditional-web-v1', tools: {},
+  }, null, 2) + '\n', 'utf8')
+  return project
+}
+
 function phpTool(argsPrefix = []) {
   return { php: { executable: process.execPath, argsPrefix } }
 }
 
-test('resolve novo profile traditional-web-v1 com instruções do JZL', (t) => {
+test('resolve novo profile traditional-web-v2 com instruções do JZL', (t) => {
   const { context } = createProject(t)
   const first = resolveProjectStandards(context)
   const second = resolveProjectStandards(context)
 
   assert.deepEqual(first, {
-    id: 'traditional-web-v1',
+    id: 'traditional-web-v2',
     template: 'traditional-web',
     instructions: [
       'Use PHP, MySQL, JavaScript, HTML e CSS como stack principal do projeto.',
@@ -62,6 +72,7 @@ test('resolve novo profile traditional-web-v1 com instruções do JZL', (t) => {
       'Arquivos PHP de primeira parte devem possuir sintaxe válida.',
       'Use a estrutura traditional-web canônica: public/ para conteúdo web, src/ para código PHP interno e database/ para SQL quando necessário.',
       'Mantenha JavaScript em public/assets/js/, CSS em public/assets/css/, HTML em public/ e PHP em public/ ou src/.',
+      'Arquivos fonte PHP, JavaScript, CSS, HTML e SQL de primeira parte devem possuir UTF-8 válido.',
     ],
   })
   assert.notStrictEqual(first, second)
@@ -69,7 +80,7 @@ test('resolve novo profile traditional-web-v1 com instruções do JZL', (t) => {
 })
 
 test('config legacy e pinned resolvem o mesmo profile e validators v1', (t) => {
-  const pinned = createProject(t)
+  const pinned = createPinnedV1Project(t)
   const legacy = createLegacyProject(t)
   const legacyConfigPath = join(legacy.root, '.jzl', 'config.json')
   const legacyBytes = readFileSync(legacyConfigPath)
@@ -94,6 +105,9 @@ test('um PHP gera validator com executable e argsPrefix configurados', (t) => {
     id: 'traditional-web:ascii-paths',
     type: 'traditional-web-ascii-paths',
   }, {
+    id: 'traditional-web:source-text',
+    type: 'traditional-web-source-text',
+  }, {
     id: 'php-syntax:index.php',
     type: 'command',
     executable: process.execPath,
@@ -110,7 +124,7 @@ test('ordena múltiplos PHP por projectPath e usa barra no ID', (t) => {
 
   assert.deepEqual(
     resolveProjectValidators(context).map((validator) => validator.id),
-    ['traditional-web:structure', 'traditional-web:ascii-paths', 'php-syntax:app/a.php', 'php-syntax:app/b.php', 'php-syntax:z.PHP'],
+    ['traditional-web:structure', 'traditional-web:ascii-paths', 'traditional-web:source-text', 'php-syntax:app/a.php', 'php-syntax:app/b.php', 'php-syntax:z.PHP'],
   )
 })
 
@@ -130,7 +144,7 @@ test('ignora diretórios reservados e de dependências em qualquer nível', (t) 
 
   assert.deepEqual(
     resolveProjectValidators(context).map((validator) => validator.id),
-    ['traditional-web:structure', 'traditional-web:ascii-paths', 'php-syntax:index.php'],
+    ['traditional-web:structure', 'traditional-web:ascii-paths', 'traditional-web:source-text', 'php-syntax:index.php'],
   )
 })
 
@@ -151,6 +165,9 @@ test('não segue diretório symlink ou junction', (t) => {
   }, {
     id: 'traditional-web:ascii-paths',
     type: 'traditional-web-ascii-paths',
+  }, {
+    id: 'traditional-web:source-text',
+    type: 'traditional-web-source-text',
   }])
 })
 
@@ -163,6 +180,9 @@ test('retorna validator ASCII quando não há PHP de primeira parte', (t) => {
   }, {
     id: 'traditional-web:ascii-paths',
     type: 'traditional-web-ascii-paths',
+  }, {
+    id: 'traditional-web:source-text',
+    type: 'traditional-web-source-text',
   }])
 })
 
@@ -176,11 +196,12 @@ test('ordena JavaScript antes de PHP e usa paths relativos no node check', (t) =
   assert.deepEqual(validators.map(({ id }) => id), [
     'traditional-web:structure',
     'traditional-web:ascii-paths',
+    'traditional-web:source-text',
     'js-syntax:a.JS',
     'js-syntax:z.js',
     'php-syntax:index.php',
   ])
-  assert.deepEqual(validators[2], {
+  assert.deepEqual(validators[3], {
     id: 'js-syntax:a.JS',
     type: 'command',
     executable: process.execPath,
@@ -196,6 +217,7 @@ test('inclui somente extensão JavaScript .js case-insensitive', (t) => {
   assert.deepEqual(resolveProjectValidators(context).map(({ id }) => id), [
     'traditional-web:structure',
     'traditional-web:ascii-paths',
+    'traditional-web:source-text',
     'js-syntax:app.js',
     'js-syntax:upper.JS',
   ])
@@ -229,7 +251,7 @@ test('propaga Config Store ausente e configuração inválida', (t) => {
   writeFileSync(join(root, '.jzl', 'config.json'), JSON.stringify({
     schemaVersion: 1,
     template: 'traditional-web',
-    standardsProfile: 'traditional-web-v2',
+    standardsProfile: 'traditional-web-v3',
     tools: {},
   }), 'utf8')
   assert.throws(() => resolveProjectStandards(context), {

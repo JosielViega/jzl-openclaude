@@ -606,6 +606,7 @@ test('configured HTML-only usa criteria e legacy vazio mantém unavailable', asy
   assert.equal(accepted.mission.status, 'completed')
   assert.deepEqual(accepted.validation.results.map(({ id }) => id), [
     'criterion-0001', 'traditional-web:structure', 'traditional-web:ascii-paths',
+    'traditional-web:source-text',
   ])
 
   const legacyProject = createTemporaryContext(t)
@@ -677,6 +678,42 @@ test('Structure FAIL sem prova solicita correction e alimenta Handoff', async (t
   const prompt = buildMissionExecutionPrompt(executionContext)
   assert.match(prompt, /js\/outside\.js/)
   assert.match(prompt, /javascript-outside-public-assets-js/)
+})
+
+test('Source Text FAIL v2 solicita correction, Event, Handoff e prompt', async (t) => {
+  const { context, projectRoot } = createTemporaryContext(t)
+  const mission = createMission('mission-0001')
+  initializeMissions(context, [mission])
+  initializeProjectConfigStore(context, { template: 'traditional-web', tools: {} })
+  ensureTraditionalWebProjectStructure(context)
+  writeFileSync(
+    join(projectRoot, 'public', 'assets', 'css', 'app.css'),
+    Buffer.from([0xff]),
+  )
+
+  const result = await validateConfiguredProjectMission(context, mission.id)
+  assert.equal(result.validation.status, 'FAIL')
+  assert.equal(result.mission.status, 'correction')
+  const sourceText = result.validation.results.find(
+    ({ id }) => id === 'traditional-web:source-text'
+  )
+  assert.deepEqual(sourceText.evidence.issues, [{
+    path: 'public/assets/css/app.css', reason: 'invalid-utf8',
+  }])
+  assert.equal(readProjectEventStore(context).events.at(-1).data.outcome, 'FAIL')
+
+  const handoff = resolveMissionCorrectionHandoff(context, mission.id)
+  assert.deepEqual(handoff.payload.failedValidators, [sourceText])
+  const executionContext = buildMissionExecutionContext(context, {
+    mission: retryProjectMissionCorrection(context, mission.id),
+    standards: { id: 'traditional-web-v2', instructions: ['Preserve o projeto.'] },
+    handoff,
+  })
+  const prompt = buildMissionExecutionPrompt(executionContext)
+  assert.match(prompt, /Traditional Web Standard:\ntraditional-web:source-text/)
+  assert.match(prompt, /public\/assets\/css\/app\.css/)
+  assert.match(prompt, /invalid-utf8/)
+  assert.equal(prompt.includes(projectRoot), false)
 })
 
 test('PHP configurado PASS sem Acceptance não comprova objetivo', async (t) => {

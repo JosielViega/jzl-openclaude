@@ -305,3 +305,20 @@ test('renderiza Structure issues com path e reason', () => {
   assert.match(prompt, /- js\/app\.js\n  Motivo: javascript-outside-public-assets-js/)
   assert.match(prompt, /detectados deterministicamente pelo JZL/)
 })
+
+test('renderiza Source Text issues sem bytes ou conteúdo', () => {
+  const sourceText = failedValidator('traditional-web:source-text', {
+    exitCode: null,
+    stderr: '',
+    standardType: 'source-text',
+    issues: [{ path: 'public/assets/css/app.css', reason: 'invalid-utf8' }],
+  })
+  const prompt = buildMissionExecutionPrompt(createExecutionContext(handoff({
+    payload: { failedValidators: [sourceText], omittedCount: 0 },
+  })))
+  assert.match(prompt, /Traditional Web Standard:\ntraditional-web:source-text/)
+  assert.match(prompt, /Tipo:\nsource-text/)
+  assert.match(prompt, /Arquivos fonte com encoding inválido:/)
+  assert.match(prompt, /- public\/assets\/css\/app\.css\n  Motivo: invalid-utf8/)
+  assert.equal(prompt.includes('0xff'), false)
+})

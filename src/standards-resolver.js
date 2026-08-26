@@ -15,10 +15,21 @@ const traditionalWebV1Instructions = [
   'Mantenha JavaScript em public/assets/js/, CSS em public/assets/css/, HTML em public/ e PHP em public/ ou src/.',
 ]
 
+const traditionalWebV2Instructions = [
+  ...traditionalWebV1Instructions,
+  'Arquivos fonte PHP, JavaScript, CSS, HTML e SQL de primeira parte devem possuir UTF-8 válido.',
+]
+
 function assertImplementedProfile(profile) {
-  if (profile !== 'traditional-web-v1') {
+  if (!['traditional-web-v1', 'traditional-web-v2'].includes(profile)) {
     throw new Error('standardsProfile não possui implementação no Standards Resolver')
   }
+}
+
+function instructionsForProfile(profile) {
+  if (profile === 'traditional-web-v1') return traditionalWebV1Instructions
+  if (profile === 'traditional-web-v2') return traditionalWebV2Instructions
+  throw new Error('standardsProfile não possui implementação no Standards Resolver')
 }
 
 export function resolveProjectStandards(context) {
@@ -29,7 +40,7 @@ export function resolveProjectStandards(context) {
   return {
     id: profile,
     template: config.template,
-    instructions: [...traditionalWebV1Instructions],
+    instructions: [...instructionsForProfile(profile)],
   }
 }
 
@@ -46,9 +57,17 @@ export function resolveProjectValidators(context) {
     throw new Error('executable PHP não configurado para traditional-web')
   }
 
-  return [
+  const baseValidators = [
     { id: 'traditional-web:structure', type: 'traditional-web-structure' },
     { id: 'traditional-web:ascii-paths', type: 'traditional-web-ascii-paths' },
+  ]
+  const sourceTextValidators = profile === 'traditional-web-v2'
+    ? [{ id: 'traditional-web:source-text', type: 'traditional-web-source-text' }]
+    : []
+
+  return [
+    ...baseValidators,
+    ...sourceTextValidators,
     ...javascriptFiles.map(({ path }) => ({
       id: `js-syntax:${path}`,
       type: 'command',

@@ -139,6 +139,27 @@ test('transporta failed acceptance criteria sem texto autoritativo', (t) => {
   assert.equal(readProjectEventStore(context).events[0].data.results[0].evidence.path, 'index.html')
 })
 
+test('transporta Source Text FAIL automaticamente sem conteúdo', (t) => {
+  const context = createContext(t)
+  const sourceTextResult = {
+    id: 'traditional-web:source-text', status: 'FAIL',
+    evidence: {
+      exitCode: null, signal: null, stdout: '', stderr: '', errorMessage: null,
+      standardType: 'source-text',
+      issues: [{ path: 'public/assets/css/app.css', reason: 'invalid-utf8' }],
+    },
+  }
+  const source = appendValidation(context, { results: [sourceTextResult] })
+  const handoff = resolveMissionCorrectionHandoff(context, 'mission-0001')
+  assert.equal(handoff.source.eventId, source.id)
+  assert.deepEqual(handoff.payload.failedValidators, [sourceTextResult])
+  handoff.payload.failedValidators[0].evidence.issues[0].path = 'changed'
+  assert.equal(
+    readProjectEventStore(context).events[0].data.results[0].evidence.issues[0].path,
+    'public/assets/css/app.css',
+  )
+})
+
 test('Plan Handoff é opcional sem histórico, approval ou somente com plan', (t) => {
   const missing = createContext(t)
   assert.equal(resolveMissionPlanExecutionHandoff(missing, 'mission-0001'), null)

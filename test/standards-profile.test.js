@@ -8,15 +8,16 @@ import {
   resolveLegacyStandardsProfile,
 } from '../src/standards-profile.js'
 
-test('suporta somente a combinação traditional-web-v1 exata', () => {
+test('suporta somente os profiles traditional-web versionados conhecidos', () => {
   assert.equal(isStandardsProfileSupported('traditional-web', 'traditional-web-v1'), true)
-  assert.equal(isStandardsProfileSupported('traditional-web', 'traditional-web-v2'), false)
+  assert.equal(isStandardsProfileSupported('traditional-web', 'traditional-web-v2'), true)
+  assert.equal(isStandardsProfileSupported('traditional-web', 'traditional-web-v3'), false)
   assert.equal(isStandardsProfileSupported('traditional-web', 'traditional-web-v10'), false)
   assert.equal(isStandardsProfileSupported('other', 'traditional-web-v1'), false)
 })
 
 test('resolve o profile inicial de novos projetos', () => {
-  assert.equal(resolveInitialStandardsProfile('traditional-web'), 'traditional-web-v1')
+  assert.equal(resolveInitialStandardsProfile('traditional-web'), 'traditional-web-v2')
   assert.throws(() => resolveInitialStandardsProfile('other'), {
     message: 'template não possui standardsProfile inicial registrado',
   })
@@ -48,7 +49,7 @@ test('resolve config explícita e config legacy sem mutar', () => {
 
 test('falha fechado para profile explícito não suportado', () => {
   assert.throws(() => resolveConfiguredStandardsProfile({
-    template: 'traditional-web', standardsProfile: 'traditional-web-v2',
+    template: 'traditional-web', standardsProfile: 'traditional-web-v3',
   }), {
     message: 'standardsProfile configurado não é suportado para o template',
   })

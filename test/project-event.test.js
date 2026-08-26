@@ -563,6 +563,36 @@ test('aceita evidence Structure PASS, FAIL e ERROR e rejeita issues inválidos',
   })))
 })
 
+test('aceita evidence Source Text PASS, FAIL e ERROR sem conteúdo', () => {
+  const issue = { path: 'public/assets/css/app.css', reason: 'invalid-utf8' }
+  for (const [status, toStatus, issues, errorMessage] of [
+    ['PASS', 'completed', [], null],
+    ['FAIL', 'correction', [issue], null],
+    ['ERROR', 'validation', [], 'falha de filesystem'],
+  ]) {
+    const value = validation(status, toStatus, {
+      results: [{
+        id: 'traditional-web:source-text', status,
+        evidence: evidence({
+          exitCode: null, standardType: 'source-text', issues, errorMessage,
+        }),
+      }],
+    })
+    assert.strictEqual(validateProjectEvent(value), value)
+  }
+
+  for (const issues of [
+    [], [issue, issue],
+    [{ path: 'b.js', reason: 'invalid-utf8' }, { path: 'a.js', reason: 'invalid-utf8' }],
+    [{ path: 'a.js', reason: 'other' }],
+  ]) assert.throws(() => validateProjectEvent(validation('FAIL', 'correction', {
+    results: [{
+      id: 'traditional-web:source-text', status: 'FAIL',
+      evidence: evidence({ exitCode: null, standardType: 'source-text', issues }),
+    }],
+  })))
+})
+
 test('rejeita metadata cruzada entre Structure, ASCII, criterion e scope', () => {
   const base = {
     exitCode: null, signal: null, stdout: '', stderr: '', errorMessage: null,

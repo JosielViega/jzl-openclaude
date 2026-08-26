@@ -296,3 +296,17 @@ test('executa Structure e ASCII no mesmo engine sem subprocesso', (t) => {
     'traditional-web:structure', 'traditional-web:ascii-paths',
   ])
 })
+
+test('executa Source Text no engine sem short-circuit', (t) => {
+  const { context, projectRoot } = createTemporaryContext(t)
+  writeFileSync(join(projectRoot, 'app.js'), Buffer.from([0xff]))
+  const validation = runProjectValidators(context, [
+    { id: 'traditional-web:source-text', type: 'traditional-web-source-text' },
+    createValidator('command-pass', ''),
+  ])
+  assert.equal(validation.status, 'FAIL')
+  assert.deepEqual(validation.results.map(({ status }) => status), ['FAIL', 'PASS'])
+  assert.deepEqual(validation.results[0].evidence.issues, [{
+    path: 'app.js', reason: 'invalid-utf8',
+  }])
+})

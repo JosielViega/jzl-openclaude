@@ -18,11 +18,12 @@ test('verifica standards sem persistir estado e detecta JavaScript inválido', (
   writeFileSync(join(root, 'public', 'assets', 'js', 'invalid.js'), 'const =')
 
   const result = checkProjectStandards(context)
-  assert.equal(result.standard, 'traditional-web-v1')
+  assert.equal(result.standard, 'traditional-web-v2')
   assert.equal(result.status, 'FAIL')
   assert.deepEqual(result.results.map(({ id }) => id), [
     'traditional-web:structure',
     'traditional-web:ascii-paths',
+    'traditional-web:source-text',
     'js-syntax:public/assets/js/invalid.js',
   ])
 })
@@ -34,7 +35,7 @@ test('projeto vazio passa somente pelo standard ASCII sem exigir State', (t) => 
   initializeProjectConfigStore(context, { template: 'traditional-web', tools: {} })
   ensureTraditionalWebProjectStructure(context)
   assert.deepEqual(checkProjectStandards(context), {
-    standard: 'traditional-web-v1',
+    standard: 'traditional-web-v2',
     status: 'PASS',
     results: [{
       id: 'traditional-web:structure',
@@ -49,6 +50,13 @@ test('projeto vazio passa somente pelo standard ASCII sem exigir State', (t) => 
       evidence: {
         exitCode: null, signal: null, stdout: '', stderr: '', errorMessage: null,
         standardType: 'ascii-paths', violations: [],
+      },
+    }, {
+      id: 'traditional-web:source-text',
+      status: 'PASS',
+      evidence: {
+        exitCode: null, signal: null, stdout: '', stderr: '', errorMessage: null,
+        standardType: 'source-text', issues: [],
       },
     }],
   })
@@ -89,7 +97,11 @@ test('legacy e pinned são equivalentes e profile inválido falha sem mutação'
         schemaVersion: 1, template: 'traditional-web', tools: {},
       }, null, 2) + '\n')
     } else {
-      initializeProjectConfigStore(context, { template: 'traditional-web' })
+      mkdirSync(join(root, '.jzl'))
+      writeFileSync(join(root, '.jzl', 'config.json'), JSON.stringify({
+        schemaVersion: 1, template: 'traditional-web',
+        standardsProfile: 'traditional-web-v1', tools: {},
+      }, null, 2) + '\n')
     }
     ensureTraditionalWebProjectStructure(context)
     return { root, context }
@@ -105,11 +117,67 @@ test('legacy e pinned são equivalentes e profile inválido falha sem mutação'
   const invalidPath = join(roots[1].root, '.jzl', 'config.json')
   writeFileSync(invalidPath, JSON.stringify({
     schemaVersion: 1, template: 'traditional-web',
-    standardsProfile: 'traditional-web-v2', tools: {},
+    standardsProfile: 'traditional-web-v3', tools: {},
   }))
   const invalidBytes = readFileSync(invalidPath)
   assert.throws(() => checkProjectStandards(roots[1].context), {
     message: 'standardsProfile da configuração do projeto não é suportado para o template',
   })
   assert.deepEqual(readFileSync(invalidPath), invalidBytes)
+})
+
+test('pinning mantém UTF-8 inválido fora do v1 e aplica Source Text somente no v2', (t) => {
+  const projects = ['legacy', 'v1', 'v2'].map((profile) => {
+    const root = mkdtempSync(join(tmpdir(), `jzl-source-profile-${profile}-`))
+    t.after(() => rmSync(root, { recursive: true, force: true }))
+    const context = createProjectContext(root)
+    mkdirSync(join(root, '.jzl'))
+    writeFileSync(join(root, '.jzl', 'config.json'), JSON.stringify({
+      schemaVersion: 1,
+      template: 'traditional-web',
+      ...(profile === 'legacy' ? {} : { standardsProfile: `traditional-web-${profile}` }),
+      tools: {},
+    }, null, 2) + '\n')
+    ensureTraditionalWebProjectStructure(context)
+    writeFileSync(join(root, 'public', 'assets', 'css', 'app.css'), Buffer.from([0xff]))
+    return { profile, root, context }
+  })
+
+  for (const project of projects.slice(0, 2)) {
+    const result = checkProjectStandards(project.context)
+    assert.equal(result.standard, 'traditional-web-v1')
+    assert.equal(result.status, 'PASS')
+    assert.equal(result.results.some(({ id }) => id === 'traditional-web:source-text'), false)
+  }
+
+  const v2 = checkProjectStandards(projects[2].context)
+  assert.equal(v2.standard, 'traditional-web-v2')
+  assert.equal(v2.status, 'FAIL')
+  assert.deepEqual(v2.results.find(({ id }) => id === 'traditional-web:source-text').evidence.issues, [{
+    path: 'public/assets/css/app.css', reason: 'invalid-utf8',
+  }])
+
+  writeFileSync(join(projects[2].root, 'public', 'assets', 'css', 'app.css'), '/* ação */\r\n')
+  assert.equal(
+    checkProjectStandards(projects[2].context).results
+      .find(({ id }) => id === 'traditional-web:source-text').status,
+    'PASS',
+  )
+})
+
+test('v2 separa encoding de sintaxe JavaScript', (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'jzl-source-syntax-'))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  const context = createProjectContext(root)
+  initializeProjectConfigStore(context, { template: 'traditional-web' })
+  ensureTraditionalWebProjectStructure(context)
+  const target = join(root, 'public', 'assets', 'js', 'app.js')
+  writeFileSync(target, 'const = ação\n', 'utf8')
+  let result = checkProjectStandards(context)
+  assert.equal(result.results.find(({ id }) => id === 'traditional-web:source-text').status, 'PASS')
+  assert.equal(result.results.find(({ id }) => id.endsWith('app.js')).status, 'FAIL')
+
+  writeFileSync(target, Buffer.from([0xff]))
+  result = checkProjectStandards(context)
+  assert.equal(result.results.find(({ id }) => id === 'traditional-web:source-text').status, 'FAIL')
 })

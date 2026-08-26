@@ -447,3 +447,25 @@ test('preserva issues de Structure como objetos clonados', (t) => {
   assert.notStrictEqual(evidence.issues, structureValidator.evidence.issues)
   assert.notStrictEqual(evidence.issues[0], structureValidator.evidence.issues[0])
 })
+
+test('preserva issues de Source Text como clone redigido sem mutar Handoff', (t) => {
+  const context = createContext(t)
+  const sourceTextValidator = {
+    id: 'traditional-web:source-text', status: 'FAIL',
+    evidence: {
+      exitCode: null, signal: null, stdout: '', stderr: '', errorMessage: null,
+      standardType: 'source-text',
+      issues: [{ path: 'public/assets/css/app.css', reason: 'invalid-utf8' }],
+    },
+  }
+  const raw = handoff({ payload: { failedValidators: [sourceTextValidator] } })
+  const snapshot = structuredClone(raw)
+  const built = buildMissionExecutionContext(context, {
+    mission: mission(), standards: standards(), handoff: raw,
+  })
+  const evidence = built.handoff.payload.failedValidators[0].evidence
+  assert.deepEqual(evidence, sourceTextValidator.evidence)
+  assert.notStrictEqual(evidence.issues, sourceTextValidator.evidence.issues)
+  assert.notStrictEqual(evidence.issues[0], sourceTextValidator.evidence.issues[0])
+  assert.deepEqual(raw, snapshot)
+})

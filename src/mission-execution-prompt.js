@@ -56,6 +56,24 @@ ${issues}
 Esses problemas foram detectados deterministicamente pelo JZL.`
     }
 
+    if (validator.evidence.standardType === 'source-text') {
+      const issues = validator.evidence.issues
+        .map(({ path, reason }) => `- ${path}\n  Motivo: ${reason}`)
+        .join('\n\n')
+
+      return `Traditional Web Standard:
+${validator.id}
+
+Tipo:
+source-text
+
+Arquivos fonte com encoding inválido:
+
+${issues}
+
+Esses problemas foram detectados deterministicamente pelo JZL.`
+    }
+
     const violations = validator.evidence.violations
       .map((path) => `- ${path}`)
       .join('\n')

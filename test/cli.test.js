@@ -125,7 +125,7 @@ test('check-standards retorna PASS ou FAIL com exit zero sem criar State/Event S
   writeFileSync(join(root, 'public', 'assets', 'js', 'index.js'), 'export const value = 1\n')
 
   const passed = runJsonCli(['check-standards', '--project-root', root])
-  assert.equal(passed.output.standard, 'traditional-web-v1')
+  assert.equal(passed.output.standard, 'traditional-web-v2')
   assert.equal(passed.output.status, 'PASS')
 
   writeFileSync(join(root, 'public', 'assets', 'js', 'index.js'), 'const =')
@@ -191,7 +191,7 @@ test('init-project mínimo retorna um único JSON e persiste stores', (t) => {
     config: {
       schemaVersion: 1,
       template: 'traditional-web',
-      standardsProfile: 'traditional-web-v1',
+      standardsProfile: 'traditional-web-v2',
       tools: {},
     },
     state: { schemaVersion: 1 },
@@ -245,7 +245,7 @@ test('check-standards rejeita profile inválido sem modificar config', (t) => {
   const content = JSON.stringify({
     schemaVersion: 1,
     template: 'traditional-web',
-    standardsProfile: 'traditional-web-v2',
+    standardsProfile: 'traditional-web-v3',
     tools: {},
   }, null, 2) + '\n'
   writeFileSync(configPath, content, 'utf8')

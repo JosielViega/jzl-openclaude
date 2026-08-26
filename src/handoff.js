@@ -3,6 +3,7 @@ import { validateMissionPlanningResult } from './mission-planning-result.js'
 import { isMissionAcceptanceCriterionType } from './mission-acceptance-criterion.js'
 import { validateExecutionChangeSet } from './execution-change-set.js'
 import { validateTraditionalWebStructureIssue } from './traditional-web-structure.js'
+import { validateTraditionalWebSourceTextIssue } from './traditional-web-source-text.js'
 
 const missionIdPattern = /^mission-\d{4,}$/
 const eventIdPattern = /^event-\d{6,}$/
@@ -98,16 +99,26 @@ function validateEvidence(validator) {
       return
     }
 
+    const issueValidator = evidence.standardType === 'structure'
+      ? validateTraditionalWebStructureIssue
+      : evidence.standardType === 'source-text'
+        ? validateTraditionalWebSourceTextIssue
+        : null
+    const expectedId = evidence.standardType === 'structure'
+      ? 'traditional-web:structure'
+      : evidence.standardType === 'source-text'
+        ? 'traditional-web:source-text'
+        : null
     if (
-      evidence.standardType !== 'structure'
-      || validator.id !== 'traditional-web:structure'
+      issueValidator === null
+      || validator.id !== expectedId
       || Object.hasOwn(evidence, 'violations')
       || !Array.isArray(evidence.issues)
       || evidence.issues.length === 0
     ) {
       throw new Error('evidence do standard do handoff é inválida')
     }
-    for (const issue of evidence.issues) validateTraditionalWebStructureIssue(issue)
+    for (const issue of evidence.issues) issueValidator(issue)
     const keys = evidence.issues.map(({ path, reason }) => `${path}\u0000${reason}`)
     if (
       new Set(keys).size !== keys.length
@@ -150,7 +161,7 @@ function validateEvidence(validator) {
     if (validator.id === 'traditional-web:ascii-paths') {
       throw new Error('metadata do standard no handoff é incompleta')
     }
-    if (validator.id === 'traditional-web:structure') {
+    if (['traditional-web:structure', 'traditional-web:source-text'].includes(validator.id)) {
       throw new Error('metadata do standard no handoff é incompleta')
     }
     return

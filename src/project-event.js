@@ -4,6 +4,7 @@ import { validateMissionReviewResult } from './mission-review-result.js'
 import { validateMissionPlanningResult } from './mission-planning-result.js'
 import { posix } from 'node:path'
 import { validateTraditionalWebStructureIssue } from './traditional-web-structure.js'
+import { validateTraditionalWebSourceTextIssue } from './traditional-web-source-text.js'
 
 const eventIdPattern = /^event-\d{6,}$/
 const missionIdPattern = /^mission-\d{4,}$/
@@ -216,7 +217,7 @@ function validateStandardViolationPath(value) {
 
 function validateStandardEvidence(result, evidence) {
   if (!Object.hasOwn(evidence, 'standardType')) {
-    if (['traditional-web:ascii-paths', 'traditional-web:structure'].includes(result.id)) {
+    if (['traditional-web:ascii-paths', 'traditional-web:structure', 'traditional-web:source-text'].includes(result.id)) {
       throw new Error('metadata do standard na evidence é incompleta')
     }
     return
@@ -254,6 +255,23 @@ function validateStandardEvidence(result, evidence) {
       throw new Error('metadata do standard na evidence é inválida')
     }
     for (const issue of evidence.issues) validateTraditionalWebStructureIssue(issue)
+    const keys = evidence.issues.map(({ path, reason }) => `${path}\u0000${reason}`)
+    if (
+      new Set(keys).size !== keys.length
+      || [...keys].sort().some((key, index) => key !== keys[index])
+    ) {
+      throw new Error('metadata do standard na evidence é inválida')
+    }
+    findings = evidence.issues
+  } else if (evidence.standardType === 'source-text') {
+    if (
+      result.id !== 'traditional-web:source-text'
+      || !Array.isArray(evidence.issues)
+      || Object.hasOwn(evidence, 'violations')
+    ) {
+      throw new Error('metadata do standard na evidence é inválida')
+    }
+    for (const issue of evidence.issues) validateTraditionalWebSourceTextIssue(issue)
     const keys = evidence.issues.map(({ path, reason }) => `${path}\u0000${reason}`)
     if (
       new Set(keys).size !== keys.length
