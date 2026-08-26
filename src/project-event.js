@@ -2,6 +2,7 @@ import { validateExecutionChangeSet } from './execution-change-set.js'
 import { isMissionAcceptanceCriterionType } from './mission-acceptance-criterion.js'
 import { validateMissionReviewResult } from './mission-review-result.js'
 import { validateMissionPlanningResult } from './mission-planning-result.js'
+import { posix } from 'node:path'
 
 const eventIdPattern = /^event-\d{6,}$/
 const missionIdPattern = /^mission-\d{4,}$/
@@ -152,7 +153,9 @@ function validateCriterionEvidence(result, evidence) {
 
 function validateScopeEvidence(result, evidence) {
   const fields = ['scopeType', 'violations']
-  const present = fields.filter(field => Object.hasOwn(evidence, field))
+  const present = Object.hasOwn(evidence, 'scopeType')
+    ? fields.filter(field => Object.hasOwn(evidence, field))
+    : []
 
   if (present.length === 0) {
     if (result.id === 'mission-change-scope') {
@@ -196,6 +199,69 @@ function validateScopeEvidence(result, evidence) {
   }
 }
 
+function validateStandardViolationPath(value) {
+  return typeof value === 'string'
+    && value !== ''
+    && value.length <= 500
+    && !value.startsWith('/')
+    && !value.includes('\\')
+    && !/[\u0000-\u001f\u007f]/u.test(value)
+    && !/^[A-Za-z]:/u.test(value)
+    && posix.normalize(value) === value
+    && !value.split('/').includes('..')
+    && !value.split('/').includes('.')
+    && !value.split('/').includes('')
+}
+
+function validateStandardEvidence(result, evidence) {
+  const fields = ['standardType', 'violations']
+  const present = Object.hasOwn(evidence, 'standardType')
+    ? fields.filter((field) => Object.hasOwn(evidence, field))
+    : []
+
+  if (present.length === 0) {
+    if (result.id === 'traditional-web:ascii-paths') {
+      throw new Error('metadata do standard na evidence é incompleta')
+    }
+    return
+  }
+  if (present.length !== fields.length) {
+    throw new Error('metadata do standard na evidence é incompleta')
+  }
+  if (
+    Object.hasOwn(evidence, 'criterionType')
+    || Object.hasOwn(evidence, 'path')
+    || Object.hasOwn(evidence, 'satisfied')
+    || Object.hasOwn(evidence, 'scopeType')
+  ) {
+    throw new Error('metadata de validator na evidence é ambígua')
+  }
+  if (
+    result.id !== 'traditional-web:ascii-paths'
+    || evidence.standardType !== 'ascii-paths'
+    || !Array.isArray(evidence.violations)
+    || !evidence.violations.every(validateStandardViolationPath)
+    || new Set(evidence.violations).size !== evidence.violations.length
+    || [...evidence.violations].sort().some((path, index) => path !== evidence.violations[index])
+  ) {
+    throw new Error('metadata do standard na evidence é inválida')
+  }
+
+  if (
+    (result.status === 'FAIL' && evidence.violations.length === 0)
+    || (result.status !== 'FAIL' && evidence.violations.length !== 0)
+    || evidence.exitCode !== null
+    || evidence.signal !== null
+    || evidence.stdout !== ''
+    || evidence.stderr !== ''
+    || (result.status === 'ERROR'
+      ? !isNonEmptyString(evidence.errorMessage)
+      : evidence.errorMessage !== null)
+  ) {
+    throw new Error('evidence do standard é incoerente com o status')
+  }
+}
+
 function validateEvidence(result) {
   const { evidence } = result
   if (!isObject(evidence)) {
@@ -225,6 +291,7 @@ function validateEvidence(result) {
     throw new Error('errorMessage da evidence deve ser string ou null')
   }
 
+  validateStandardEvidence(result, evidence)
   validateScopeEvidence(result, evidence)
   validateCriterionEvidence(result, evidence)
 }

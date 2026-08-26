@@ -37,6 +37,23 @@ Satisfeito:
 ${validator.evidence.satisfied}`
   }
 
+  if (validator.evidence.standardType !== undefined) {
+    const violations = validator.evidence.violations
+      .map((path) => `- ${path}`)
+      .join('\n')
+
+    return `Traditional Web Standard:
+${validator.id}
+
+Tipo:
+${validator.evidence.standardType}
+
+Paths fora do padrão ASCII:
+${violations}
+
+Esses paths foram detectados deterministicamente pelo JZL.`
+  }
+
   return `Validator:
 ${validator.id}
 

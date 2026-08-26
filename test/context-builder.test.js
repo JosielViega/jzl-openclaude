@@ -406,3 +406,24 @@ test('preserva metadata compacta de failed criterion sem compartilhar Handoff', 
   built.handoff.payload.failedValidators[0].evidence.path = 'changed'
   assert.equal(raw.payload.failedValidators[0].evidence.path, 'index.html')
 })
+
+test('preserva evidence do standard ASCII como clone contextual', (t) => {
+  const context = createContext(t)
+  const standardValidator = {
+    id: 'traditional-web:ascii-paths',
+    status: 'FAIL',
+    evidence: {
+      exitCode: null, signal: null, stdout: '', stderr: '', errorMessage: null,
+      standardType: 'ascii-paths', violations: ['ação.js'],
+    },
+  }
+  const raw = handoff({ payload: { failedValidators: [standardValidator] } })
+  const built = buildMissionExecutionContext(context, {
+    mission: mission(), standards: standards(), handoff: raw,
+  })
+  assert.deepEqual(built.handoff.payload.failedValidators[0].evidence, standardValidator.evidence)
+  assert.notStrictEqual(
+    built.handoff.payload.failedValidators[0].evidence.violations,
+    standardValidator.evidence.violations,
+  )
+})

@@ -263,3 +263,18 @@ test('rejeita IDs duplicados entre criterion e command', (t) => {
     createValidator('criterion-0001', ''),
   ]), { message: 'ids dos validators não podem ser duplicados' })
 })
+
+test('executa standard ASCII no mesmo engine e preserva ordem', (t) => {
+  const { context, projectRoot } = createTemporaryContext(t)
+  writeFileSync(join(projectRoot, 'ação.js'), '')
+  const validation = runProjectValidators(context, [
+    { id: 'traditional-web:ascii-paths', type: 'traditional-web-ascii-paths' },
+    createValidator('command-pass', ''),
+  ])
+
+  assert.equal(validation.status, 'FAIL')
+  assert.deepEqual(validation.results.map(({ id }) => id), [
+    'traditional-web:ascii-paths',
+    'command-pass',
+  ])
+})

@@ -67,6 +67,11 @@ function createValidationProject(t, mode) {
     objective: 'Validar sintaxe',
     status: 'validation',
     dependencies: [],
+    acceptanceCriteria: [{
+      id: 'criterion-0001',
+      type: 'file-exists',
+      path: 'index.php',
+    }],
   }
 
   writeFileSync(fakePhpPath, (
@@ -104,6 +109,66 @@ test('check-root preserva saída textual', (t) => {
   assert.match(result.stdout, /projectRoot válido/)
   assert.ok(result.stdout.includes(normalize(root)))
   assert.equal(result.stderr, '')
+})
+
+test('check-standards retorna PASS ou FAIL com exit zero sem criar State/Event Store', (t) => {
+  const root = createRoot(t)
+  initializeProjectConfigStore(createProjectContext(root), {
+    template: 'traditional-web',
+    tools: {},
+  })
+  writeFileSync(join(root, 'index.js'), 'export const value = 1\n')
+
+  const passed = runJsonCli(['check-standards', '--project-root', root])
+  assert.equal(passed.output.standard, 'traditional-web-v1')
+  assert.equal(passed.output.status, 'PASS')
+
+  writeFileSync(join(root, 'index.js'), 'const =')
+  const failed = runJsonCli(['check-standards', '--project-root', root])
+  assert.equal(failed.output.status, 'FAIL')
+  assert.equal(existsSync(join(root, '.jzl', 'state.json')), false)
+  assert.equal(existsSync(join(root, '.jzl', 'events.json')), false)
+})
+
+test('check-standards reporta path Unicode como FAIL com exit zero', (t) => {
+  const root = createRoot(t)
+  initializeProjectConfigStore(createProjectContext(root), {
+    template: 'traditional-web',
+    tools: {},
+  })
+  writeFileSync(join(root, 'ação.js'), 'export const value = 1\n')
+
+  const { output } = runJsonCli(['check-standards', '--project-root', root])
+  assert.equal(output.status, 'FAIL')
+  assert.deepEqual(output.results[0].evidence.violations, ['ação.js'])
+})
+
+test('check-standards valida opções e falha na preparação sem PHP configurado', (t) => {
+  for (const [argumentsList, message] of [
+    [['check-standards'], '--project-root é obrigatório'],
+    [[
+      'check-standards', '--project-root', 'a', '--project-root', 'b',
+    ], 'opção duplicada: --project-root'],
+    [[
+      'check-standards', '--project-root', 'a', '--other', 'b',
+    ], 'argumento desconhecido: --other'],
+  ]) {
+    const result = runCli(argumentsList)
+    assert.equal(result.status, 1)
+    assert.equal(result.stderr.trim(), message)
+  }
+
+  const root = createRoot(t)
+  initializeProjectConfigStore(createProjectContext(root), {
+    template: 'traditional-web', tools: {},
+  })
+  writeFileSync(join(root, 'index.php'), '<?php')
+  const missingPhp = runCli(['check-standards', '--project-root', root])
+  assert.equal(missingPhp.status, 1)
+  assert.equal(
+    missingPhp.stderr.trim(),
+    'executable PHP não configurado para traditional-web',
+  )
 })
 
 test('init-project mínimo retorna um único JSON e persiste stores', (t) => {

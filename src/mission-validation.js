@@ -28,7 +28,7 @@ function recordUnavailableAndThrow(context, missionId, validationError) {
   throw validationError
 }
 
-export async function validateProjectMission(context, missionId, validators) {
+async function validateMission(context, missionId, validators, configured) {
   const mission = getProjectMission(context, missionId)
 
   if (mission.status !== 'validation') {
@@ -36,6 +36,9 @@ export async function validateProjectMission(context, missionId, validators) {
   }
 
   let validation
+  const acceptanceValidators = structuredClone(
+    mission.acceptanceCriteria ?? [],
+  )
 
   try {
     const scopeValidators = Object.hasOwn(mission, 'changeScope')
@@ -44,9 +47,6 @@ export async function validateProjectMission(context, missionId, validators) {
           resolveLatestMissionExecutionChangeSet(context, missionId),
         )]
       : []
-    const acceptanceValidators = structuredClone(
-      mission.acceptanceCriteria ?? [],
-    )
     validation = runProjectValidators(context, [
       ...scopeValidators,
       ...acceptanceValidators,
@@ -54,6 +54,17 @@ export async function validateProjectMission(context, missionId, validators) {
     ])
   } catch (error) {
     recordUnavailableAndThrow(context, missionId, error)
+  }
+
+  const hasObjectiveProof = acceptanceValidators.length > 0
+    || (!configured && validators.length > 0)
+
+  if (validation.status === 'PASS' && !hasObjectiveProof) {
+    recordUnavailableAndThrow(
+      context,
+      missionId,
+      new Error('Mission não possui validação específica suficiente para comprovar o objetivo'),
+    )
   }
 
   let finalMission
@@ -78,6 +89,10 @@ export async function validateProjectMission(context, missionId, validators) {
   }
 }
 
+export async function validateProjectMission(context, missionId, validators) {
+  return validateMission(context, missionId, validators, false)
+}
+
 export async function validateConfiguredProjectMission(context, missionId) {
   const mission = getProjectMission(context, missionId)
 
@@ -93,5 +108,5 @@ export async function validateConfiguredProjectMission(context, missionId) {
     recordUnavailableAndThrow(context, missionId, error)
   }
 
-  return validateProjectMission(context, missionId, validators)
+  return validateMission(context, missionId, validators, true)
 }

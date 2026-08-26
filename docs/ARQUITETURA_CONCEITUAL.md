@@ -30,6 +30,8 @@ Coordena o ciclo de vida das Missions e é o único componente autorizado a efet
 
 Determina os padrões aplicáveis ao projeto e a uma Mission, de forma previsível e rastreável. Evita que cada sessão reinvente convenções de estrutura, código e decisões técnicas.
 
+No perfil `traditional-web-v1`, o JZL usa o Validator Engine para verificar deterministicamente nomes ASCII de arquivos e diretórios, sintaxe JavaScript pelo runtime Node atual e sintaxe PHP pelo executável configurado. Diretórios de controle e dependências (`.jzl`, `.git`, `.openclaude`, `vendor` e `node_modules`) são ignorados, e links simbólicos e junctions não são percorridos. Um `FAIL` pode solicitar correção, mas conformidade do projeto não equivale a cumprimento da Mission: somente Acceptance Criteria ou validators específicos fornecidos explicitamente comprovam seu objetivo; Change Scope representa autorização, não prova. A verificação ampla `check-standards` é somente leitura e não depende de Mission.
+
 ### Context Builder
 
 Constrói o contexto mínimo necessário para uma responsabilidade. Seleciona instruções, padrões, estado e artefatos relevantes sem compartilhar transcripts automaticamente.

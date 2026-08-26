@@ -267,3 +267,21 @@ test('renderiza acceptance criteria autoritativos e failed criterion compacto', 
   ]) assert.ok(prompt.includes(value))
   assert.equal(prompt.includes('Exit code:\nnull'), false)
 })
+
+test('renderiza failed standard ASCII como diagnóstico determinístico', () => {
+  const standard = failedValidator('traditional-web:ascii-paths', {
+    exitCode: null,
+    stderr: '',
+    standardType: 'ascii-paths',
+    violations: ['ação.js'],
+  })
+  const value = handoff({
+    payload: { failedValidators: [standard], omittedCount: 0 },
+  })
+  const prompt = buildMissionExecutionPrompt(createExecutionContext(value))
+  assert.match(prompt, /Traditional Web Standard:/)
+  assert.match(prompt, /traditional-web:ascii-paths/)
+  assert.match(prompt, /Tipo:\nascii-paths/)
+  assert.match(prompt, /- ação\.js/)
+  assert.match(prompt, /detectados deterministicamente pelo JZL/)
+})

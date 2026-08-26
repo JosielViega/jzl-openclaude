@@ -232,6 +232,26 @@ test('aceita failed acceptance criterion em mission-correction', () => {
   assert.equal(JSON.stringify(value).includes('BEFORE'), false)
 })
 
+test('aceita somente FAIL do standard ASCII no Handoff', () => {
+  const standard = failedValidator({
+    id: 'traditional-web:ascii-paths',
+    evidence: {
+      exitCode: null,
+      signal: null,
+      stdout: '',
+      stderr: '',
+      errorMessage: null,
+      standardType: 'ascii-paths',
+      violations: ['ação.js'],
+    },
+  })
+  const handoff = validHandoff({ payload: { failedValidators: [standard] } })
+  assert.strictEqual(validateHandoff(handoff), handoff)
+  assert.throws(() => validateHandoff(validHandoff({
+    payload: { failedValidators: [{ ...standard, status: 'ERROR' }] },
+  })))
+})
+
 test('rejeita evidence incoerente de criterion no handoff', () => {
   const value = validHandoff({
     payload: { failedValidators: [{

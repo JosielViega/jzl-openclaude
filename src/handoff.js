@@ -10,6 +10,19 @@ function isObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
+function isStandardViolationPath(value) {
+  return typeof value === 'string'
+    && value !== ''
+    && value.length <= 500
+    && !value.startsWith('/')
+    && !value.includes('\\')
+    && !/[\u0000-\u001f\u007f]/u.test(value)
+    && !/^[A-Za-z]:/u.test(value)
+    && value.split('/').every(
+      (segment) => segment !== '' && segment !== '.' && segment !== '..'
+    )
+}
+
 function validateEvidence(validator) {
   const { evidence } = validator
   if (!isObject(evidence)) {
@@ -43,10 +56,43 @@ function validateEvidence(validator) {
   const present = fields.filter((field) => Object.hasOwn(evidence, field))
 
   const scopeFields = ['scopeType', 'violations']
-  const scopePresent = scopeFields.filter(field => Object.hasOwn(evidence, field))
+  const scopePresent = Object.hasOwn(evidence, 'scopeType')
+    ? scopeFields.filter(field => Object.hasOwn(evidence, field))
+    : []
+  const standardFields = ['standardType', 'violations']
+  const standardPresent = Object.hasOwn(evidence, 'standardType')
+    ? standardFields.filter(field => Object.hasOwn(evidence, field))
+    : []
 
-  if (present.length > 0 && scopePresent.length > 0) {
+  if (
+    [present.length > 0, scopePresent.length > 0, standardPresent.length > 0]
+      .filter(Boolean).length > 1
+  ) {
     throw new Error('metadata de validator na evidence é ambígua')
+  }
+
+  if (standardPresent.length > 0) {
+    if (
+      standardPresent.length !== standardFields.length
+      || validator.id !== 'traditional-web:ascii-paths'
+      || validator.status !== 'FAIL'
+      || evidence.standardType !== 'ascii-paths'
+      || evidence.exitCode !== null
+      || evidence.signal !== null
+      || evidence.stdout !== ''
+      || evidence.stderr !== ''
+      || evidence.errorMessage !== null
+      || !Array.isArray(evidence.violations)
+      || evidence.violations.length === 0
+      || !evidence.violations.every(isStandardViolationPath)
+      || new Set(evidence.violations).size !== evidence.violations.length
+      || [...evidence.violations].sort().some(
+        (path, index) => path !== evidence.violations[index]
+      )
+    ) {
+      throw new Error('evidence do standard do handoff é inválida')
+    }
+    return
   }
 
   if (scopePresent.length > 0) {
@@ -77,6 +123,9 @@ function validateEvidence(validator) {
   if (present.length === 0) {
     if (validator.id === 'mission-change-scope') {
       throw new Error('metadata do Change Scope no handoff é incompleta')
+    }
+    if (validator.id === 'traditional-web:ascii-paths') {
+      throw new Error('metadata do standard no handoff é incompleta')
     }
     return
   }

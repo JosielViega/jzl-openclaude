@@ -479,3 +479,55 @@ test('create rejeita controle externo e coleção existente inválida', () => {
   const duplicate = executionSuccess()
   assert.throws(() => createProjectEvent([duplicate, { ...duplicate }], input), { message: 'ids dos eventos não podem ser duplicados' })
 })
+
+test('aceita evidence do standard ASCII e rejeita metadata incoerente', () => {
+  const standardEvidence = evidence({
+    exitCode: null,
+    standardType: 'ascii-paths',
+    violations: ['ação.js'],
+  })
+  const value = validation('FAIL', 'correction', {
+    results: [{
+      id: 'traditional-web:ascii-paths',
+      status: 'FAIL',
+      evidence: standardEvidence,
+    }],
+  })
+  assert.strictEqual(validateProjectEvent(value), value)
+
+  for (const [status, toStatus, violations, errorMessage] of [
+    ['PASS', 'completed', [], null],
+    ['ERROR', 'validation', [], 'falha de discovery'],
+  ]) {
+    const standard = validation(status, toStatus, {
+      results: [{
+        id: 'traditional-web:ascii-paths', status,
+        evidence: evidence({
+          exitCode: null, standardType: 'ascii-paths', violations, errorMessage,
+        }),
+      }],
+    })
+    assert.strictEqual(validateProjectEvent(standard), standard)
+  }
+
+  for (const violations of [[], ['b.js', 'a.js'], ['../fora.js'], ['C:\\fora.js']]) {
+    assert.throws(() => validateProjectEvent(validation('FAIL', 'correction', {
+      results: [{
+        id: 'traditional-web:ascii-paths',
+        status: 'FAIL',
+        evidence: { ...standardEvidence, violations },
+      }],
+    })))
+  }
+  assert.throws(() => validateProjectEvent(validation('ERROR', 'validation', {
+    results: [{
+      id: 'traditional-web:ascii-paths', status: 'ERROR',
+      evidence: evidence({
+        exitCode: null,
+        standardType: 'ascii-paths',
+        violations: ['ação.js'],
+        errorMessage: 'falha',
+      }),
+    }],
+  })))
+})

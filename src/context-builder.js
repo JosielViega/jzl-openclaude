@@ -69,6 +69,14 @@ function cloneFailedValidator(result, redactProjectRoot) {
           path => truncateText(redactProjectRoot(path), 500),
         ),
       }
+  const standardEvidence = result.evidence.standardType === undefined
+    ? {}
+    : {
+        standardType: result.evidence.standardType,
+        violations: result.evidence.violations.map(
+          path => truncateText(redactProjectRoot(path), 500),
+        ),
+      }
 
   return {
     id: result.id,
@@ -83,6 +91,7 @@ function cloneFailedValidator(result, redactProjectRoot) {
         : null,
       ...criterionEvidence,
       ...scopeEvidence,
+      ...standardEvidence,
     },
   }
 }

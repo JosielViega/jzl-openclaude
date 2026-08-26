@@ -16,6 +16,7 @@ import { validateProjectRoot } from './project-root.js'
 import { runProjectMission } from './project-runner.js'
 import { configureProjectModel } from './model-router.js'
 import { buildMissionAuditReport } from './mission-audit-report.js'
+import { checkProjectStandards } from './project-standards-check.js'
 
 const projectRootOption = {
   '--project-root': { required: true },
@@ -61,6 +62,9 @@ try {
     const projectRoot = validateProjectRoot(options['--project-root'])
 
     console.log(`projectRoot válido: ${projectRoot}`)
+  } else if (command === 'check-standards') {
+    const options = parseCliOptions(argumentsList, projectRootOption)
+    printJson(checkProjectStandards(createContext(options)))
   } else if (command === 'init-project') {
     const options = parseCliOptions(argumentsList, {
       ...projectRootOption,

@@ -11,6 +11,10 @@ import {
   runMissionChangeScopeValidator,
   validateMissionChangeScopeValidator,
 } from './mission-change-scope-validator.js'
+import {
+  runTraditionalWebAsciiPathsValidator,
+  validateTraditionalWebAsciiPathsValidator,
+} from './traditional-web-ascii-validator.js'
 
 function validateValidatorDefinition(validator) {
   if (validator === null || typeof validator !== 'object' || Array.isArray(validator)) {
@@ -38,6 +42,11 @@ function validateValidatorDefinition(validator) {
   }
 
   if (validator.type !== 'command') {
+    if (validator.type === 'traditional-web-ascii-paths') {
+      validateTraditionalWebAsciiPathsValidator(validator)
+      return
+    }
+
     if (validator.type === 'mission-change-scope') {
       validateMissionChangeScopeValidator(validator)
       return
@@ -181,6 +190,8 @@ export function runProjectValidators(context, validators) {
       ? runValidator(projectRoot, validator)
       : validator.type === 'mission-change-scope'
         ? runMissionChangeScopeValidator(validator)
+        : validator.type === 'traditional-web-ascii-paths'
+          ? runTraditionalWebAsciiPathsValidator(context, validator)
       : runMissionAcceptanceCriterion(context, validator)
   ))
   let status = 'PASS'

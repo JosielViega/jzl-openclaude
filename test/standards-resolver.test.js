@@ -43,6 +43,8 @@ test('resolve novo profile traditional-web-v1 com instruções do JZL', (t) => {
       'Prefira código simples, explícito e fácil de revisar.',
       'Preserve a estrutura e as convenções já existentes do projeto.',
       'Use somente caracteres ASCII em nomes de arquivos e diretórios.',
+      'Arquivos JavaScript de primeira parte devem possuir sintaxe válida.',
+      'Arquivos PHP de primeira parte devem possuir sintaxe válida.',
     ],
   })
   assert.notStrictEqual(first, second)
@@ -55,6 +57,9 @@ test('um PHP gera validator com executable e argsPrefix configurados', (t) => {
   writeFileSync(join(root, 'index.php'), '<?php', 'utf8')
 
   assert.deepEqual(resolveProjectValidators(context), [{
+    id: 'traditional-web:ascii-paths',
+    type: 'traditional-web-ascii-paths',
+  }, {
     id: 'php-syntax:index.php',
     type: 'command',
     executable: process.execPath,
@@ -71,7 +76,7 @@ test('ordena múltiplos PHP por projectPath e usa barra no ID', (t) => {
 
   assert.deepEqual(
     resolveProjectValidators(context).map((validator) => validator.id),
-    ['php-syntax:app/a.php', 'php-syntax:app/b.php', 'php-syntax:z.PHP'],
+    ['traditional-web:ascii-paths', 'php-syntax:app/a.php', 'php-syntax:app/b.php', 'php-syntax:z.PHP'],
   )
 })
 
@@ -91,7 +96,7 @@ test('ignora diretórios reservados e de dependências em qualquer nível', (t) 
 
   assert.deepEqual(
     resolveProjectValidators(context).map((validator) => validator.id),
-    ['php-syntax:index.php'],
+    ['traditional-web:ascii-paths', 'php-syntax:index.php'],
   )
 })
 
@@ -106,13 +111,52 @@ test('não segue diretório symlink ou junction', (t) => {
     process.platform === 'win32' ? 'junction' : 'dir',
   )
 
-  assert.deepEqual(resolveProjectValidators(context), [])
+  assert.deepEqual(resolveProjectValidators(context), [{
+    id: 'traditional-web:ascii-paths',
+    type: 'traditional-web-ascii-paths',
+  }])
 })
 
-test('retorna lista vazia quando não há PHP de primeira parte', (t) => {
+test('retorna validator ASCII quando não há PHP de primeira parte', (t) => {
   const { context, root } = createProject(t)
   writeFileSync(join(root, 'index.html'), '', 'utf8')
-  assert.deepEqual(resolveProjectValidators(context), [])
+  assert.deepEqual(resolveProjectValidators(context), [{
+    id: 'traditional-web:ascii-paths',
+    type: 'traditional-web-ascii-paths',
+  }])
+})
+
+test('ordena JavaScript antes de PHP e usa paths relativos no node check', (t) => {
+  const { context, root } = createProject(t, phpTool())
+  writeFileSync(join(root, 'z.js'), 'export const z = 1\n', 'utf8')
+  writeFileSync(join(root, 'a.JS'), 'export const a = 1\n', 'utf8')
+  writeFileSync(join(root, 'index.php'), '', 'utf8')
+
+  const validators = resolveProjectValidators(context)
+  assert.deepEqual(validators.map(({ id }) => id), [
+    'traditional-web:ascii-paths',
+    'js-syntax:a.JS',
+    'js-syntax:z.js',
+    'php-syntax:index.php',
+  ])
+  assert.deepEqual(validators[1], {
+    id: 'js-syntax:a.JS',
+    type: 'command',
+    executable: process.execPath,
+    args: ['--check', 'a.JS'],
+  })
+})
+
+test('inclui somente extensão JavaScript .js case-insensitive', (t) => {
+  const { context, root } = createProject(t)
+  for (const name of ['app.js', 'upper.JS', 'module.mjs', 'common.cjs', 'code.ts', 'view.tsx']) {
+    writeFileSync(join(root, name), '', 'utf8')
+  }
+  assert.deepEqual(resolveProjectValidators(context).map(({ id }) => id), [
+    'traditional-web:ascii-paths',
+    'js-syntax:app.js',
+    'js-syntax:upper.JS',
+  ])
 })
 
 test('rejeita PHP sem executable configurado', (t) => {

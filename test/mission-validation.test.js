@@ -145,7 +145,7 @@ test('Scope Validator roda primeiro e FAIL envia Mission para correction', async
   assert.match(prompt, /config\.php/)
 })
 
-test('Scope Validator PASS conclui com Change Set permitido ou vazio', async (t) => {
+test('Scope Validator PASS sem prova específica mantém validation', async (t) => {
   const { context } = createTemporaryContext(t)
   const mission = createMission('mission-0001', 'validation', {
     changeScope: { allowedPaths: ['index.html'] },
@@ -154,9 +154,11 @@ test('Scope Validator PASS conclui com Change Set permitido ou vazio', async (t)
   recordScopedExecution(context, mission.id, {
     created: [], modified: ['index.html'], deleted: [],
   })
-  const result = await validateProjectMission(context, mission.id, [])
-  assert.equal(result.validation.status, 'PASS')
-  assert.equal(result.mission.status, 'completed')
+  await assert.rejects(validateProjectMission(context, mission.id, []), {
+    message: 'Mission não possui validação específica suficiente para comprovar o objetivo',
+  })
+  assert.equal(readProjectStateStore(context).missions[0].status, 'validation')
+  assert.equal(readProjectEventStore(context).events.at(-1).type, 'mission.validation.unavailable')
 })
 
 test('scope sem Change Set produz ERROR e mantém Mission validation', async (t) => {
@@ -442,7 +444,9 @@ test('ERROR prevalece sobre FAIL e mantém Mission em validation', async (t) => 
 
 test('validação configurada PHP PASS conclui e libera dependente', async (t) => {
   const { context, projectRoot } = createTemporaryContext(t)
-  const missionA = createMission('mission-0001')
+  const missionA = createMission('mission-0001', 'validation', {
+    acceptanceCriteria: [{ id: 'criterion-0001', type: 'file-exists', path: 'index.php' }],
+  })
   const missionB = createMission('mission-0002', 'pending', {
     dependencies: [missionA.id],
   })
@@ -597,6 +601,9 @@ test('configured HTML-only usa criteria e legacy vazio mantém unavailable', asy
   const accepted = await validateConfiguredProjectMission(acceptedProject.context, acceptedMission.id)
   assert.equal(accepted.validation.status, 'PASS')
   assert.equal(accepted.mission.status, 'completed')
+  assert.deepEqual(accepted.validation.results.map(({ id }) => id), [
+    'criterion-0001', 'traditional-web:ascii-paths',
+  ])
 
   const legacyProject = createTemporaryContext(t)
   const legacyMission = createMission('mission-0001')
@@ -604,15 +611,52 @@ test('configured HTML-only usa criteria e legacy vazio mantém unavailable', asy
   initializeProjectConfigStore(legacyProject.context, { template: 'traditional-web', tools: {} })
   await assert.rejects(
     validateConfiguredProjectMission(legacyProject.context, legacyMission.id),
-    { message: 'ao menos um validator é obrigatório' },
+    { message: 'Mission não possui validação específica suficiente para comprovar o objetivo' },
   )
   assert.equal(readProjectStateStore(legacyProject.context).missions[0].status, 'validation')
   assert.equal(readProjectEventStore(legacyProject.context).events[0].type, 'mission.validation.unavailable')
 })
 
-test('validação configurada executa todos os PHP de primeira parte', async (t) => {
+test('standard ASCII FAIL sem prova solicita correction e alimenta Handoff', async (t) => {
   const { context, projectRoot } = createTemporaryContext(t)
   const mission = createMission('mission-0001')
+  writeFileSync(join(projectRoot, 'usuários.html'), '')
+  initializeMissions(context, [mission])
+  initializeProjectConfigStore(context, { template: 'traditional-web', tools: {} })
+
+  const result = await validateConfiguredProjectMission(context, mission.id)
+  assert.equal(result.validation.status, 'FAIL')
+  assert.equal(result.mission.status, 'correction')
+  assert.equal(readProjectEventStore(context).events.at(-1).type, 'mission.validation.finished')
+
+  const handoff = resolveMissionCorrectionHandoff(context, mission.id)
+  assert.equal(handoff.payload.failedValidators[0].id, 'traditional-web:ascii-paths')
+  assert.deepEqual(handoff.payload.failedValidators[0].evidence.violations, ['usuários.html'])
+  const executionContext = buildMissionExecutionContext(context, {
+    mission: retryProjectMissionCorrection(context, mission.id),
+    standards: { id: 'traditional-web-v1', instructions: ['Preserve o projeto.'] },
+    handoff,
+  })
+  assert.match(buildMissionExecutionPrompt(executionContext), /Traditional Web Standard:/)
+})
+
+test('PHP configurado PASS sem Acceptance não comprova objetivo', async (t) => {
+  const { context, projectRoot } = createTemporaryContext(t)
+  const mission = createMission('mission-0001')
+  writeFileSync(join(projectRoot, 'index.php'), '<?php', 'utf8')
+  initializeConfiguredValidation(context, projectRoot, [mission])
+
+  await assert.rejects(validateConfiguredProjectMission(context, mission.id), {
+    message: 'Mission não possui validação específica suficiente para comprovar o objetivo',
+  })
+  assert.equal(readProjectStateStore(context).missions[0].status, 'validation')
+})
+
+test('validação configurada executa todos os PHP de primeira parte', async (t) => {
+  const { context, projectRoot } = createTemporaryContext(t)
+  const mission = createMission('mission-0001', 'validation', {
+    acceptanceCriteria: [{ id: 'criterion-0001', type: 'file-exists', path: 'a.php' }],
+  })
   const logPath = join(projectRoot, 'executed.txt')
   const fakePhpPath = join(projectRoot, 'fake-php.js')
   writeFileSync(join(projectRoot, 'a.php'), '<?php', 'utf8')
@@ -635,7 +679,9 @@ test('validação configurada executa todos os PHP de primeira parte', async (t)
 
 test('PHP inválido dentro de vendor é ignorado', async (t) => {
   const { context, projectRoot } = createTemporaryContext(t)
-  const mission = createMission('mission-0001')
+  const mission = createMission('mission-0001', 'validation', {
+    acceptanceCriteria: [{ id: 'criterion-0001', type: 'file-exists', path: 'index.php' }],
+  })
   writeFileSync(join(projectRoot, 'index.php'), '<?php', 'utf8')
   const vendor = join(projectRoot, 'vendor')
   mkdirSync(vendor)
@@ -664,13 +710,13 @@ test('PHP sem configuração mantém Mission validation', async (t) => {
   assert.equal(event.data.errorMessage, 'executable PHP não configurado para traditional-web')
 })
 
-test('zero PHP propaga exigência de validator e mantém Mission validation', async (t) => {
+test('standards PASS sem prova mantém Mission validation', async (t) => {
   const { context, projectRoot } = createTemporaryContext(t)
   const mission = createMission('mission-0001')
   initializeConfiguredValidation(context, projectRoot, [mission])
 
   await assert.rejects(validateConfiguredProjectMission(context, mission.id), {
-    message: 'ao menos um validator é obrigatório',
+    message: 'Mission não possui validação específica suficiente para comprovar o objetivo',
   })
   assert.equal(readProjectStateStore(context).missions[0].status, 'validation')
   const events = readProjectEventStore(context).events
