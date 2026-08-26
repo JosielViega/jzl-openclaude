@@ -122,6 +122,21 @@ test('configure persiste trim e preserva outra rota, tools e campos aditivos', (
   assert.equal(readProjectConfigStore(context).models['mission-review'], 'model-b')
 })
 
+test('configure model não migra standardsProfile de config legacy', (t) => {
+  const context = setup(t)
+  writeProjectConfigStore(context, {
+    schemaVersion: 1, template: 'traditional-web', tools: {},
+  })
+
+  configureProjectModel(context, {
+    responsibility: 'mission-execution', model: 'model-a',
+  })
+
+  const config = readProjectConfigStore(context)
+  assert.equal(config.models['mission-execution'], 'model-a')
+  assert.equal(Object.hasOwn(config, 'standardsProfile'), false)
+})
+
 test('configure inválido e Store ausente falham sem inicialização', (t) => {
   const context = setup(t)
   const before = structuredClone(readProjectConfigStore(context))

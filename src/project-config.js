@@ -4,6 +4,10 @@ import {
   isRegisteredResponsibility,
   resolveResponsibilityDefinition,
 } from './responsibility-registry.js'
+import {
+  isStandardsProfileSupported,
+  resolveInitialStandardsProfile,
+} from './standards-profile.js'
 
 function isObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -69,6 +73,22 @@ export function validateProjectConfig(config) {
     throw new Error('template da configuração do projeto não é suportado')
   }
 
+  if (Object.hasOwn(config, 'standardsProfile')) {
+    if (typeof config.standardsProfile !== 'string') {
+      throw new Error('standardsProfile da configuração do projeto deve ser uma string')
+    }
+
+    if (config.standardsProfile.trim() === '') {
+      throw new Error('standardsProfile da configuração do projeto não pode ser vazio')
+    }
+
+    if (!isStandardsProfileSupported(config.template, config.standardsProfile)) {
+      throw new Error(
+        'standardsProfile da configuração do projeto não é suportado para o template',
+      )
+    }
+  }
+
   if (config.tools === undefined) {
     throw new Error('tools da configuração do projeto é obrigatório')
   }
@@ -125,6 +145,10 @@ export function createProjectConfig(input) {
     throw new Error('schemaVersion da configuração inicial é controlado pelo JZL')
   }
 
+  if (Object.hasOwn(input, 'standardsProfile')) {
+    throw new Error('standardsProfile da configuração inicial é controlado pelo JZL')
+  }
+
   let tools = input.tools
   let models = input.models
 
@@ -149,10 +173,20 @@ export function createProjectConfig(input) {
     models = { ...models }
   }
 
-  return validateProjectConfig({
+  const config = {
     schemaVersion: 1,
     template: input.template,
     tools,
     ...(models === undefined ? {} : { models }),
+  }
+
+  validateProjectConfig(config)
+
+  return validateProjectConfig({
+    schemaVersion: config.schemaVersion,
+    template: config.template,
+    standardsProfile: resolveInitialStandardsProfile(config.template),
+    tools: config.tools,
+    ...(config.models === undefined ? {} : { models: config.models }),
   })
 }

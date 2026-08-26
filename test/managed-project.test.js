@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import {
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -33,7 +34,12 @@ test('inicializa projeto traditional-web com config e state separados', (t) => {
 
   assert.deepEqual(result, {
     projectRoot,
-    config: { schemaVersion: 1, template: 'traditional-web', tools: {} },
+    config: {
+      schemaVersion: 1,
+      template: 'traditional-web',
+      standardsProfile: 'traditional-web-v1',
+      tools: {},
+    },
     state: { schemaVersion: 1 },
   })
   assert.deepEqual(result.config, readProjectConfigStore(context))
@@ -104,6 +110,26 @@ test('rerun é idempotente e não sobrescreve stores existentes', (t) => {
   assert.equal(readFileSync(eventsPath, 'utf8'), eventsBefore)
   assert.equal(result.config.tools.php.executable, process.execPath)
   assert.equal(existsSync(join(projectRoot, 'public', 'assets', 'images')), true)
+})
+
+test('rerun de projeto legacy preserva config sem standardsProfile', (t) => {
+  const { context, projectRoot } = createProject(t)
+  const configDirectory = join(projectRoot, '.jzl')
+  const configPath = join(configDirectory, 'config.json')
+  const legacyContent = '{\n  "schemaVersion": 1,\n  "template": "traditional-web",\n  "tools": {}\n}\n'
+  mkdirSync(configDirectory)
+  writeFileSync(configPath, legacyContent, 'utf8')
+
+  const result = initializeManagedProject(context, { template: 'traditional-web' })
+
+  assert.equal(readFileSync(configPath, 'utf8'), legacyContent)
+  assert.deepEqual(result.config, {
+    schemaVersion: 1, template: 'traditional-web', tools: {},
+  })
+  assert.equal(Object.hasOwn(result.config, 'standardsProfile'), false)
+  assert.equal(existsSync(join(projectRoot, 'public', 'assets', 'images')), true)
+  assert.equal(existsSync(join(projectRoot, '.jzl', 'state.json')), true)
+  assert.equal(existsSync(join(projectRoot, '.jzl', 'events.json')), true)
 })
 
 test('input inválido falha antes de criar State Store', (t) => {

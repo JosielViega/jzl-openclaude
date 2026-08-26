@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -76,4 +76,40 @@ test('preserva PHP configurado e agrega sintaxe válida ou inválida', (t) => {
   const failed = checkProjectStandards(context)
   assert.equal(failed.status, 'FAIL')
   assert.equal(failed.results.at(-1).id, 'php-syntax:public/index.php')
+})
+
+test('legacy e pinned são equivalentes e profile inválido falha sem mutação', (t) => {
+  const roots = ['legacy', 'pinned'].map((kind) => {
+    const root = mkdtempSync(join(tmpdir(), `jzl-project-standards-${kind}-`))
+    t.after(() => rmSync(root, { recursive: true, force: true }))
+    const context = createProjectContext(root)
+    if (kind === 'legacy') {
+      mkdirSync(join(root, '.jzl'))
+      writeFileSync(join(root, '.jzl', 'config.json'), JSON.stringify({
+        schemaVersion: 1, template: 'traditional-web', tools: {},
+      }, null, 2) + '\n')
+    } else {
+      initializeProjectConfigStore(context, { template: 'traditional-web' })
+    }
+    ensureTraditionalWebProjectStructure(context)
+    return { root, context }
+  })
+  const legacyPath = join(roots[0].root, '.jzl', 'config.json')
+  const legacyBytes = readFileSync(legacyPath)
+  assert.deepEqual(
+    checkProjectStandards(roots[0].context),
+    checkProjectStandards(roots[1].context),
+  )
+  assert.deepEqual(readFileSync(legacyPath), legacyBytes)
+
+  const invalidPath = join(roots[1].root, '.jzl', 'config.json')
+  writeFileSync(invalidPath, JSON.stringify({
+    schemaVersion: 1, template: 'traditional-web',
+    standardsProfile: 'traditional-web-v2', tools: {},
+  }))
+  const invalidBytes = readFileSync(invalidPath)
+  assert.throws(() => checkProjectStandards(roots[1].context), {
+    message: 'standardsProfile da configuração do projeto não é suportado para o template',
+  })
+  assert.deepEqual(readFileSync(invalidPath), invalidBytes)
 })

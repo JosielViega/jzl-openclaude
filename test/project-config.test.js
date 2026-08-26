@@ -13,6 +13,7 @@ test('cria configuração traditional-web mínima', () => {
   assert.deepEqual(createProjectConfig({ template: 'traditional-web' }), {
     schemaVersion: 1,
     template: 'traditional-web',
+    standardsProfile: 'traditional-web-v1',
     tools: {},
   })
 })
@@ -24,6 +25,7 @@ test('cria configuração com PHP e argsPrefix padrão', () => {
   }), {
     schemaVersion: 1,
     template: 'traditional-web',
+    standardsProfile: 'traditional-web-v1',
     tools: { php: { executable: absolutePhp, argsPrefix: [] } },
   })
 })
@@ -33,6 +35,27 @@ test('não aceita schemaVersion inicial fornecido pelo chamador', () => {
     () => createProjectConfig({ schemaVersion: 1, template: 'traditional-web' }),
     { message: 'schemaVersion da configuração inicial é controlado pelo JZL' },
   )
+})
+
+test('não aceita standardsProfile inicial fornecido pelo chamador', () => {
+  assert.throws(() => createProjectConfig({
+    template: 'traditional-web', standardsProfile: 'traditional-web-v1',
+  }), {
+    message: 'standardsProfile da configuração inicial é controlado pelo JZL',
+  })
+})
+
+test('valida config legacy e explicitamente pinned sem normalizar', () => {
+  const legacy = { schemaVersion: 1, template: 'traditional-web', tools: {} }
+  const explicit = {
+    schemaVersion: 1,
+    template: 'traditional-web',
+    standardsProfile: 'traditional-web-v1',
+    tools: {},
+  }
+  assert.strictEqual(validateProjectConfig(legacy), legacy)
+  assert.strictEqual(validateProjectConfig(explicit), explicit)
+  assert.equal(Object.hasOwn(legacy, 'standardsProfile'), false)
 })
 
 for (const [name, config, message] of [
@@ -45,6 +68,14 @@ for (const [name, config, message] of [
   ['template não string', { schemaVersion: 1, template: 1, tools: {} }, 'template da configuração do projeto deve ser uma string'],
   ['template vazio', { schemaVersion: 1, template: ' ', tools: {} }, 'template da configuração do projeto não pode ser vazio'],
   ['template desconhecido', { schemaVersion: 1, template: 'other', tools: {} }, 'template da configuração do projeto não é suportado'],
+  ['template desconhecido precede profile', { schemaVersion: 1, template: 'other', standardsProfile: 'other-v1', tools: {} }, 'template da configuração do projeto não é suportado'],
+  ['standardsProfile não string', { schemaVersion: 1, template: 'traditional-web', standardsProfile: null, tools: {} }, 'standardsProfile da configuração do projeto deve ser uma string'],
+  ['standardsProfile vazio', { schemaVersion: 1, template: 'traditional-web', standardsProfile: '', tools: {} }, 'standardsProfile da configuração do projeto não pode ser vazio'],
+  ['standardsProfile whitespace', { schemaVersion: 1, template: 'traditional-web', standardsProfile: '   ', tools: {} }, 'standardsProfile da configuração do projeto não pode ser vazio'],
+  ['standardsProfile v2', { schemaVersion: 1, template: 'traditional-web', standardsProfile: 'traditional-web-v2', tools: {} }, 'standardsProfile da configuração do projeto não é suportado para o template'],
+  ['standardsProfile alheio', { schemaVersion: 1, template: 'traditional-web', standardsProfile: 'unity-v1', tools: {} }, 'standardsProfile da configuração do projeto não é suportado para o template'],
+  ['standardsProfile com espaço inicial', { schemaVersion: 1, template: 'traditional-web', standardsProfile: ' traditional-web-v1', tools: {} }, 'standardsProfile da configuração do projeto não é suportado para o template'],
+  ['standardsProfile com espaço final', { schemaVersion: 1, template: 'traditional-web', standardsProfile: 'traditional-web-v1 ', tools: {} }, 'standardsProfile da configuração do projeto não é suportado para o template'],
   ['tools ausente', { schemaVersion: 1, template: 'traditional-web' }, 'tools da configuração do projeto é obrigatório'],
   ['tools inválido', { schemaVersion: 1, template: 'traditional-web', tools: [] }, 'tools da configuração do projeto deve ser um objeto'],
   ['php inválido', { schemaVersion: 1, template: 'traditional-web', tools: { php: null } }, 'configuração da ferramenta PHP deve ser um objeto'],
@@ -87,6 +118,7 @@ test('createProjectConfig não muta input nem argsPrefix', () => {
   const snapshot = structuredClone(input)
   const config = createProjectConfig(input)
 
+  assert.equal(config.standardsProfile, 'traditional-web-v1')
   config.tools.php.argsPrefix.push('changed')
   assert.deepEqual(input, snapshot)
   assert.strictEqual(input.tools.php.argsPrefix, argsPrefix)
@@ -140,6 +172,7 @@ test('createProjectConfig omite models ausente e clona models presente', () => {
   const input = { template: 'traditional-web', models }
   const snapshot = structuredClone(input)
   const config = createProjectConfig(input)
+  assert.equal(config.standardsProfile, 'traditional-web-v1')
   assert.deepEqual(config.models, models)
   assert.notStrictEqual(config.models, models)
   config.models['mission-execution'] = 'changed'

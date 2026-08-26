@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import {
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -23,6 +24,18 @@ function createProject(t, tools = {}) {
   const context = createProjectContext(root)
   t.after(() => rmSync(root, { recursive: true, force: true }))
   initializeProjectConfigStore(context, { template: 'traditional-web', tools })
+  ensureTraditionalWebProjectStructure(context)
+  return { context, root }
+}
+
+function createLegacyProject(t) {
+  const root = mkdtempSync(join(tmpdir(), 'jzl-standards-resolver-legacy-'))
+  const context = createProjectContext(root)
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  mkdirSync(join(root, '.jzl'))
+  writeFileSync(join(root, '.jzl', 'config.json'), JSON.stringify({
+    schemaVersion: 1, template: 'traditional-web', tools: {},
+  }, null, 2) + '\n', 'utf8')
   ensureTraditionalWebProjectStructure(context)
   return { context, root }
 }
@@ -53,6 +66,20 @@ test('resolve novo profile traditional-web-v1 com instruções do JZL', (t) => {
   })
   assert.notStrictEqual(first, second)
   assert.notStrictEqual(first.instructions, second.instructions)
+})
+
+test('config legacy e pinned resolvem o mesmo profile e validators v1', (t) => {
+  const pinned = createProject(t)
+  const legacy = createLegacyProject(t)
+  const legacyConfigPath = join(legacy.root, '.jzl', 'config.json')
+  const legacyBytes = readFileSync(legacyConfigPath)
+
+  assert.deepEqual(resolveProjectStandards(legacy.context), resolveProjectStandards(pinned.context))
+  assert.deepEqual(
+    resolveProjectValidators(legacy.context).map(({ id }) => id),
+    resolveProjectValidators(pinned.context).map(({ id }) => id),
+  )
+  assert.deepEqual(readFileSync(legacyConfigPath), legacyBytes)
 })
 
 test('um PHP gera validator com executable e argsPrefix configurados', (t) => {
@@ -197,5 +224,15 @@ test('propaga Config Store ausente e configuração inválida', (t) => {
   }), 'utf8')
   assert.throws(() => resolveProjectValidators(context), {
     message: 'schemaVersion da configuração do projeto não é suportado',
+  })
+
+  writeFileSync(join(root, '.jzl', 'config.json'), JSON.stringify({
+    schemaVersion: 1,
+    template: 'traditional-web',
+    standardsProfile: 'traditional-web-v2',
+    tools: {},
+  }), 'utf8')
+  assert.throws(() => resolveProjectStandards(context), {
+    message: 'standardsProfile da configuração do projeto não é suportado para o template',
   })
 })

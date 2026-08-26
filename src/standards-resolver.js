@@ -1,8 +1,9 @@
 import { readProjectConfigStore } from './project-config-store.js'
 import { resolveExistingProjectPath } from './project-path.js'
 import { discoverTraditionalWebProjectEntries } from './traditional-web-project-discovery.js'
+import { resolveConfiguredStandardsProfile } from './standards-profile.js'
 
-const traditionalWebInstructions = [
+const traditionalWebV1Instructions = [
   'Use PHP, MySQL, JavaScript, HTML e CSS como stack principal do projeto.',
   'Não adicione frameworks, runtimes ou dependências extras sem necessidade explícita da Mission ou dos padrões do projeto.',
   'Prefira código simples, explícito e fácil de revisar.',
@@ -14,18 +15,28 @@ const traditionalWebInstructions = [
   'Mantenha JavaScript em public/assets/js/, CSS em public/assets/css/, HTML em public/ e PHP em public/ ou src/.',
 ]
 
+function assertImplementedProfile(profile) {
+  if (profile !== 'traditional-web-v1') {
+    throw new Error('standardsProfile não possui implementação no Standards Resolver')
+  }
+}
+
 export function resolveProjectStandards(context) {
   const config = readProjectConfigStore(context)
+  const profile = resolveConfiguredStandardsProfile(config)
+  assertImplementedProfile(profile)
 
   return {
-    id: 'traditional-web-v1',
+    id: profile,
     template: config.template,
-    instructions: [...traditionalWebInstructions],
+    instructions: [...traditionalWebV1Instructions],
   }
 }
 
 export function resolveProjectValidators(context) {
   const config = readProjectConfigStore(context)
+  const profile = resolveConfiguredStandardsProfile(config)
+  assertImplementedProfile(profile)
   const files = discoverTraditionalWebProjectEntries(context)
     .filter((entry) => entry.kind === 'file')
   const javascriptFiles = files.filter((entry) => entry.path.toLowerCase().endsWith('.js'))

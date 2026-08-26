@@ -36,6 +36,10 @@ O Traditional Web Structure Contract v1 exige os diretórios reais `public/`, `p
 
 `init-project` garante somente esse scaffold de diretórios e pode restaurar diretórios obrigatórios ausentes em nova execução, sem criar placeholders ou mover arquivos da aplicação. `check-standards` apenas observa e reporta a estrutura. Mesmo quando o Structure Standard passa, a conclusão de uma Mission continua exigindo prova específica de seu objetivo.
 
+O Project Config separa a família `template` do contrato versionado `standardsProfile`. Novos projetos `traditional-web` são explicitamente pinned em `traditional-web-v1`; configurações legacy sem o campo permanecem válidas e resolvem permanentemente para esse mesmo perfil, nunca para um conceito de “latest”. O perfil inicial de novos projetos poderá evoluir no futuro sem alterar o legacy pin.
+
+Atualizar o JZL não altera implicitamente o contrato de standards de um projeto. Não há migração automática nem comando de upgrade nesta versão: reruns de `init-project` preservam configurações legacy sem adicionar o campo, e `check-standards` usa o profile efetivo do projeto de forma somente leitura.
+
 ### Context Builder
 
 Constrói o contexto mínimo necessário para uma responsabilidade. Seleciona instruções, padrões, estado e artefatos relevantes sem compartilhar transcripts automaticamente.

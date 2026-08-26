@@ -42,7 +42,7 @@ test('inicializa configuração mínima separada do State Store', (t) => {
   })
 
   assert.equal(result, realpathSync.native(configPath))
-  assert.equal(readFileSync(configPath, 'utf8'), '{\n  "schemaVersion": 1,\n  "template": "traditional-web",\n  "tools": {}\n}\n')
+  assert.equal(readFileSync(configPath, 'utf8'), '{\n  "schemaVersion": 1,\n  "template": "traditional-web",\n  "standardsProfile": "traditional-web-v1",\n  "tools": {}\n}\n')
   assert.equal(existsSync(join(root, '.jzl', 'state.json')), false)
   assert.equal(readFileSync(configPath, 'utf8').includes('projectRoot'), false)
   assert.deepEqual(readdirSync(join(root, '.jzl')), ['config.json'])
@@ -59,6 +59,7 @@ test('inicializa configuração com PHP', (t) => {
   assert.deepEqual(readProjectConfigStore(context), {
     schemaVersion: 1,
     template: 'traditional-web',
+    standardsProfile: 'traditional-web-v1',
     tools: { php: { executable: process.execPath, argsPrefix: [] } },
   })
 })
@@ -86,8 +87,47 @@ test('lê e escreve configuração preservando campos aditivos', (t) => {
   writeProjectConfigStore(context, config)
 
   assert.deepEqual(readProjectConfigStore(context), config)
+  assert.equal(Object.hasOwn(readProjectConfigStore(context), 'standardsProfile'), false)
   assert.equal(readFileSync(join(root, '.jzl', 'config.json'), 'utf8').endsWith('\n'), true)
   assert.equal(readdirSync(join(root, '.jzl')).some((name) => name.endsWith('.tmp')), false)
+})
+
+test('lê e regrava config legacy sem adicionar standardsProfile', (t) => {
+  const root = createRoot(t)
+  const context = createProjectContext(root)
+  const configPath = join(root, '.jzl', 'config.json')
+  const legacy = { schemaVersion: 1, template: 'traditional-web', tools: {} }
+  mkdirSync(join(root, '.jzl'))
+  writeFileSync(configPath, `${JSON.stringify(legacy, null, 2)}\n`, 'utf8')
+
+  const read = readProjectConfigStore(context)
+  assert.deepEqual(read, legacy)
+  assert.equal(Object.hasOwn(read, 'standardsProfile'), false)
+  writeProjectConfigStore(context, read)
+  assert.deepEqual(JSON.parse(readFileSync(configPath, 'utf8')), legacy)
+  assert.equal(readFileSync(configPath, 'utf8').endsWith('\n'), true)
+})
+
+test('preserva profile explícito e rejeita profile inválido na leitura', (t) => {
+  const root = createRoot(t)
+  const context = createProjectContext(root)
+  const configPath = join(root, '.jzl', 'config.json')
+  mkdirSync(join(root, '.jzl'))
+  const pinned = {
+    schemaVersion: 1, template: 'traditional-web',
+    standardsProfile: 'traditional-web-v1', tools: {},
+  }
+  writeFileSync(configPath, `${JSON.stringify(pinned, null, 2)}\n`, 'utf8')
+  assert.deepEqual(readProjectConfigStore(context), pinned)
+  writeProjectConfigStore(context, pinned)
+  assert.deepEqual(JSON.parse(readFileSync(configPath, 'utf8')), pinned)
+
+  writeFileSync(configPath, JSON.stringify({
+    ...pinned, standardsProfile: 'traditional-web-v2',
+  }), 'utf8')
+  assert.throws(() => readProjectConfigStore(context), {
+    message: 'standardsProfile da configuração do projeto não é suportado para o template',
+  })
 })
 
 test('rejeita configuração ausente sem inicializar', (t) => {

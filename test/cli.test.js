@@ -188,7 +188,12 @@ test('init-project mínimo retorna um único JSON e persiste stores', (t) => {
 
   assert.deepEqual(output, {
     projectRoot: root,
-    config: { schemaVersion: 1, template: 'traditional-web', tools: {} },
+    config: {
+      schemaVersion: 1,
+      template: 'traditional-web',
+      standardsProfile: 'traditional-web-v1',
+      tools: {},
+    },
     state: { schemaVersion: 1 },
   })
   assert.equal(result.stdout.trim().split(/\r?\n/).length, 1)
@@ -213,6 +218,47 @@ test('init-project mínimo retorna um único JSON e persiste stores', (t) => {
     storePaths.map((name) => readFileSync(join(root, '.jzl', name))),
     storesBefore,
   )
+})
+
+test('init-project preserva bytes e ausência de profile em config legacy', (t) => {
+  const root = createRoot(t)
+  const configDirectory = join(root, '.jzl')
+  const configPath = join(configDirectory, 'config.json')
+  const legacyContent = '{\n  "schemaVersion": 1,\n  "template": "traditional-web",\n  "tools": {}\n}\n'
+  mkdirSync(configDirectory)
+  writeFileSync(configPath, legacyContent, 'utf8')
+
+  const { output } = runJsonCli([
+    'init-project', '--project-root', root, '--template', 'traditional-web',
+  ])
+
+  assert.equal(readFileSync(configPath, 'utf8'), legacyContent)
+  assert.equal(Object.hasOwn(output.config, 'standardsProfile'), false)
+  assert.equal(existsSync(join(root, 'public', 'assets', 'images')), true)
+})
+
+test('check-standards rejeita profile inválido sem modificar config', (t) => {
+  const root = createRoot(t)
+  const configDirectory = join(root, '.jzl')
+  const configPath = join(configDirectory, 'config.json')
+  mkdirSync(configDirectory)
+  const content = JSON.stringify({
+    schemaVersion: 1,
+    template: 'traditional-web',
+    standardsProfile: 'traditional-web-v2',
+    tools: {},
+  }, null, 2) + '\n'
+  writeFileSync(configPath, content, 'utf8')
+
+  const result = runCli(['check-standards', '--project-root', root])
+
+  assert.equal(result.status, 1)
+  assert.equal(
+    result.stderr.trim(),
+    'standardsProfile da configuração do projeto não é suportado para o template',
+  )
+  assert.equal(readFileSync(configPath, 'utf8'), content)
+  assert.equal(existsSync(join(root, 'public')), false)
 })
 
 test('init-project rejeita conflito estrutural antes de criar Stores', (t) => {
