@@ -40,7 +40,9 @@ O Traditional Web Structure Contract v1 exige os diretórios reais `public/`, `p
 
 O Project Config separa a família `template` do contrato versionado `standardsProfile`. Novos projetos `traditional-web` são explicitamente pinned no profile inicial `traditional-web-v2`; configurações legacy sem o campo permanecem válidas e resolvem permanentemente para o profile legacy `traditional-web-v1`, nunca para um conceito de “latest”. A criação do v2 demonstra que profiles pinned não são alterados pela evolução do JZL.
 
-Atualizar o JZL não altera implicitamente o contrato de standards de um projeto. Não há migração automática nem comando de upgrade nesta versão: reruns de `init-project` preservam configurações legacy sem adicionar o campo, e `check-standards` usa o profile efetivo do projeto de forma somente leitura.
+Atualizar o JZL não altera implicitamente o contrato de standards de um projeto. Reruns de `init-project` preservam configurações legacy sem adicionar o campo, e `check-standards` usa o profile efetivo do projeto de forma somente leitura.
+
+O Standards Profile Upgrade v1 permite somente a transição explícita `traditional-web-v1 -> traditional-web-v2`; configurações legacy resolvem como v1 e também podem ser promovidas. As transições são registradas explicitamente, sem comparação numérica ou conceito de “latest”. O profile alvo é validado antes da escrita: `FAIL` ou `ERROR` preservam a Config, `--dry-run` executa a mesma validação sem persistir e somente um `PASS` real pinna o target. Downgrade e same-profile não são upgrades. A operação altera somente a Config, sem Mission, Event, State ou modelo, sob a hipótese existente de um único writer.
 
 ### Context Builder
 

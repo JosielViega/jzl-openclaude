@@ -17,6 +17,7 @@ import { runProjectMission } from './project-runner.js'
 import { configureProjectModel } from './model-router.js'
 import { buildMissionAuditReport } from './mission-audit-report.js'
 import { checkProjectStandards } from './project-standards-check.js'
+import { upgradeProjectStandards } from './standards-profile-upgrade.js'
 
 const projectRootOption = {
   '--project-root': { required: true },
@@ -65,6 +66,16 @@ try {
   } else if (command === 'check-standards') {
     const options = parseCliOptions(argumentsList, projectRootOption)
     printJson(checkProjectStandards(createContext(options)))
+  } else if (command === 'upgrade-standards') {
+    const options = parseCliOptions(argumentsList, {
+      ...projectRootOption,
+      '--to': { required: true },
+      '--dry-run': { boolean: true },
+    })
+    printJson(upgradeProjectStandards(createContext(options), {
+      to: options['--to'],
+      dryRun: options['--dry-run'] === true,
+    }))
   } else if (command === 'init-project') {
     const options = parseCliOptions(argumentsList, {
       ...projectRootOption,

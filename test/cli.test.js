@@ -180,6 +180,119 @@ test('check-standards valida opções e falha na preparação sem PHP configurad
   )
 })
 
+test('upgrade-standards valida opções booleanas e erros de preparação', (t) => {
+  for (const [argumentsList, message] of [
+    [['upgrade-standards', '--to', 'traditional-web-v2'], '--project-root é obrigatório'],
+    [['upgrade-standards', '--project-root', 'x'], '--to é obrigatório'],
+    [['upgrade-standards', '--project-root', 'x', '--to', 'a', '--to', 'b'], 'opção duplicada: --to'],
+    [['upgrade-standards', '--project-root', 'x', '--to', 'a', '--dry-run', '--dry-run'], 'opção duplicada: --dry-run'],
+    [['upgrade-standards', '--project-root', 'x', '--to', 'a', '--other'], 'argumento desconhecido: --other'],
+    [['upgrade-standards', '--project-root', 'x', '--to', 'a', '--dry-run', 'true'], 'argumento desconhecido: true'],
+  ]) {
+    const result = runCli(argumentsList)
+    assert.equal(result.status, 1)
+    assert.equal(result.stderr.trim(), message)
+  }
+
+  const missing = createRoot(t)
+  const result = runCli([
+    'upgrade-standards', '--project-root', missing, '--to', 'traditional-web-v2',
+  ])
+  assert.equal(result.status, 1)
+  assert.equal(result.stderr.trim(), 'arquivo de configuração do projeto não existe')
+
+  const phpRoot = createRoot(t)
+  const phpContext = createProjectContext(phpRoot)
+  mkdirSync(join(phpRoot, '.jzl'))
+  const phpConfigPath = join(phpRoot, '.jzl', 'config.json')
+  writeFileSync(phpConfigPath, JSON.stringify({
+    schemaVersion: 1, template: 'traditional-web',
+    standardsProfile: 'traditional-web-v1', tools: {},
+  }, null, 2) + '\n')
+  ensureTraditionalWebProjectStructure(phpContext)
+  writeFileSync(join(phpRoot, 'src', 'App.php'), '<?php', 'utf8')
+  const before = readFileSync(phpConfigPath)
+  const missingPhp = runCli([
+    'upgrade-standards', '--project-root', phpRoot, '--to', 'traditional-web-v2',
+  ])
+  assert.equal(missingPhp.status, 1)
+  assert.equal(missingPhp.stderr.trim(), 'executable PHP não configurado para traditional-web')
+  assert.deepEqual(readFileSync(phpConfigPath), before)
+})
+
+test('upgrade-standards CLI faz preview FAIL e PASS antes do upgrade real', (t) => {
+  const root = createRoot(t)
+  const context = createProjectContext(root)
+  mkdirSync(join(root, '.jzl'))
+  const configPath = join(root, '.jzl', 'config.json')
+  writeFileSync(configPath, JSON.stringify({
+    schemaVersion: 1, template: 'traditional-web',
+    standardsProfile: 'traditional-web-v1', tools: {},
+  }, null, 2) + '\n')
+  ensureTraditionalWebProjectStructure(context)
+  const cssPath = join(root, 'public', 'assets', 'css', 'app.css')
+  writeFileSync(cssPath, Buffer.from([0xff]))
+  const before = readFileSync(configPath)
+
+  for (const dryRunArguments of [['--dry-run'], []]) {
+    const { result, output } = runJsonCli([
+      'upgrade-standards', '--project-root', root,
+      ...dryRunArguments, '--to', 'traditional-web-v2',
+    ])
+    assert.equal(result.stdout.trim().split(/\r?\n/).length, 1)
+    assert.equal(output.status, 'FAIL')
+    assert.equal(output.upgraded, false)
+    assert.equal(output.results.find(({ id }) => id === 'traditional-web:source-text').status, 'FAIL')
+    assert.deepEqual(readFileSync(configPath), before)
+  }
+
+  writeFileSync(cssPath, '/* ação */\n', 'utf8')
+  const preview = runJsonCli([
+    'upgrade-standards', '--project-root', root,
+    '--to', 'traditional-web-v2', '--dry-run',
+  ]).output
+  assert.equal(preview.status, 'PASS')
+  assert.equal(preview.upgraded, false)
+  assert.deepEqual(readFileSync(configPath), before)
+
+  const upgraded = runJsonCli([
+    'upgrade-standards', '--project-root', root, '--to', 'traditional-web-v2',
+  ]).output
+  assert.equal(upgraded.status, 'PASS')
+  assert.equal(upgraded.upgraded, true)
+  assert.equal(JSON.parse(readFileSync(configPath, 'utf8')).standardsProfile, 'traditional-web-v2')
+
+  for (const to of ['traditional-web-v1', 'traditional-web-v2', 'traditional-web-v3']) {
+    const rejected = runCli([
+      'upgrade-standards', '--project-root', root, '--to', to,
+    ])
+    assert.equal(rejected.status, 1)
+    assert.equal(rejected.stderr.trim(), 'transição de standardsProfile não é suportada')
+  }
+})
+
+test('upgrade-standards CLI retorna aggregate ERROR com exit zero', (t) => {
+  const root = createRoot(t)
+  const context = createProjectContext(root)
+  mkdirSync(join(root, '.jzl'))
+  const configPath = join(root, '.jzl', 'config.json')
+  writeFileSync(configPath, JSON.stringify({
+    schemaVersion: 1, template: 'traditional-web',
+    standardsProfile: 'traditional-web-v1',
+    tools: { php: { executable: join(root, 'missing-php.exe'), argsPrefix: [] } },
+  }, null, 2) + '\n')
+  ensureTraditionalWebProjectStructure(context)
+  writeFileSync(join(root, 'src', 'App.php'), '<?php', 'utf8')
+  const before = readFileSync(configPath)
+
+  const { output } = runJsonCli([
+    'upgrade-standards', '--project-root', root, '--to', 'traditional-web-v2',
+  ])
+  assert.equal(output.status, 'ERROR')
+  assert.equal(output.upgraded, false)
+  assert.deepEqual(readFileSync(configPath), before)
+})
+
 test('init-project mínimo retorna um único JSON e persiste stores', (t) => {
   const root = createRoot(t)
   const { result, output } = runJsonCli([

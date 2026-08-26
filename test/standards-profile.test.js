@@ -3,10 +3,24 @@ import { test } from 'node:test'
 
 import {
   isStandardsProfileSupported,
+  isStandardsProfileUpgradeSupported,
   resolveConfiguredStandardsProfile,
   resolveInitialStandardsProfile,
   resolveLegacyStandardsProfile,
 } from '../src/standards-profile.js'
+
+test('registra explicitamente somente upgrade traditional-web v1 para v2', () => {
+  assert.equal(isStandardsProfileUpgradeSupported(
+    'traditional-web', 'traditional-web-v1', 'traditional-web-v2'
+  ), true)
+  for (const [template, from, to] of [
+    ['traditional-web', 'traditional-web-v2', 'traditional-web-v1'],
+    ['traditional-web', 'traditional-web-v1', 'traditional-web-v1'],
+    ['traditional-web', 'traditional-web-v2', 'traditional-web-v2'],
+    ['traditional-web', 'traditional-web-v1', 'traditional-web-v3'],
+    ['other', 'traditional-web-v1', 'traditional-web-v2'],
+  ]) assert.equal(isStandardsProfileUpgradeSupported(template, from, to), false)
+})
 
 test('suporta somente os profiles traditional-web versionados conhecidos', () => {
   assert.equal(isStandardsProfileSupported('traditional-web', 'traditional-web-v1'), true)

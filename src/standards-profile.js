@@ -10,8 +10,18 @@ const legacyProfiles = new Map([
   ['traditional-web', 'traditional-web-v1'],
 ])
 
+const upgradeTransitions = new Map([
+  ['traditional-web', new Map([
+    ['traditional-web-v1', new Set(['traditional-web-v2'])],
+  ])],
+])
+
 export function isStandardsProfileSupported(template, standardsProfile) {
   return supportedProfiles.get(template)?.has(standardsProfile) ?? false
+}
+
+export function isStandardsProfileUpgradeSupported(template, fromProfile, toProfile) {
+  return upgradeTransitions.get(template)?.get(fromProfile)?.has(toProfile) ?? false
 }
 
 export function resolveInitialStandardsProfile(template) {

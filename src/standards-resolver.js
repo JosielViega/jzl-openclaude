@@ -1,7 +1,10 @@
 import { readProjectConfigStore } from './project-config-store.js'
 import { resolveExistingProjectPath } from './project-path.js'
 import { discoverTraditionalWebProjectEntries } from './traditional-web-project-discovery.js'
-import { resolveConfiguredStandardsProfile } from './standards-profile.js'
+import {
+  isStandardsProfileSupported,
+  resolveConfiguredStandardsProfile,
+} from './standards-profile.js'
 
 const traditionalWebV1Instructions = [
   'Use PHP, MySQL, JavaScript, HTML e CSS como stack principal do projeto.',
@@ -47,6 +50,10 @@ export function resolveProjectStandards(context) {
 export function resolveProjectValidators(context) {
   const config = readProjectConfigStore(context)
   const profile = resolveConfiguredStandardsProfile(config)
+  return createProjectValidatorsForProfile(context, config, profile)
+}
+
+function createProjectValidatorsForProfile(context, config, profile) {
   assertImplementedProfile(profile)
   const files = discoverTraditionalWebProjectEntries(context)
     .filter((entry) => entry.kind === 'file')
@@ -85,4 +92,12 @@ export function resolveProjectValidators(context) {
       ],
     })),
   ]
+}
+
+export function resolveProjectValidatorsForProfile(context, standardsProfile) {
+  const config = readProjectConfigStore(context)
+  if (!isStandardsProfileSupported(config.template, standardsProfile)) {
+    throw new Error('standardsProfile alvo não é suportado para o template')
+  }
+  return createProjectValidatorsForProfile(context, config, standardsProfile)
 }

@@ -16,6 +16,7 @@ import { initializeProjectConfigStore } from '../src/project-config-store.js'
 import {
   resolveProjectStandards,
   resolveProjectValidators,
+  resolveProjectValidatorsForProfile,
 } from '../src/standards-resolver.js'
 import { ensureTraditionalWebProjectStructure } from '../src/traditional-web-structure.js'
 
@@ -91,6 +92,36 @@ test('config legacy e pinned resolvem o mesmo profile e validators v1', (t) => {
     resolveProjectValidators(pinned.context).map(({ id }) => id),
   )
   assert.deepEqual(readFileSync(legacyConfigPath), legacyBytes)
+})
+
+test('resolve validators target v2 sem alterar config pinned v1 ou legacy', (t) => {
+  for (const project of [createPinnedV1Project(t), createLegacyProject(t)]) {
+    const configPath = join(project.root, '.jzl', 'config.json')
+    const before = readFileSync(configPath)
+    const current = resolveProjectValidators(project.context).map(({ id }) => id)
+    const target = resolveProjectValidatorsForProfile(
+      project.context, 'traditional-web-v2'
+    ).map(({ id }) => id)
+    assert.deepEqual(current, [
+      'traditional-web:structure', 'traditional-web:ascii-paths',
+    ])
+    assert.deepEqual(target, [
+      'traditional-web:structure', 'traditional-web:ascii-paths',
+      'traditional-web:source-text',
+    ])
+    assert.deepEqual(readFileSync(configPath), before)
+  }
+})
+
+test('resolver target rejeita profile desconhecido sem modificar config', (t) => {
+  const project = createPinnedV1Project(t)
+  const configPath = join(project.root, '.jzl', 'config.json')
+  const before = readFileSync(configPath)
+  assert.throws(
+    () => resolveProjectValidatorsForProfile(project.context, 'traditional-web-v3'),
+    { message: 'standardsProfile alvo não é suportado para o template' },
+  )
+  assert.deepEqual(readFileSync(configPath), before)
 })
 
 test('um PHP gera validator com executable e argsPrefix configurados', (t) => {
