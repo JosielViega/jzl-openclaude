@@ -20,6 +20,18 @@ const allowedToolsByAccess = new Map([
   ['read-write', new Set(['Read', 'Glob', 'Grep', 'Write', 'Edit'])],
   ['read-only', new Set(['Read', 'Glob', 'Grep'])],
 ])
+// Wire names e aliases verificados no bundle SDK 0.29.1 (tools.ts e permissionRuleParser).
+// Rever esta compatibilidade quando o pin do OpenClaude for atualizado.
+const knownOpenClaudeToolNames = [
+  'Agent', 'AgentOutputTool', 'AskUserQuestion', 'Bash', 'BashOutputTool', 'Brief',
+  'CronCreate', 'CronDelete', 'CronList', 'Edit', 'EnterPlanMode', 'EnterWorktree',
+  'ExitPlanMode', 'ExitWorktree', 'Glob', 'Grep', 'KillShell', 'LSP',
+  'ListMcpResourcesTool', 'Monitor', 'NotebookEdit', 'PowerShell', 'Read',
+  'ReadMcpResourceTool', 'RepoMap', 'SendMessage', 'SendUserMessage', 'Skill',
+  'Task', 'TaskCreate', 'TaskGet', 'TaskList', 'TaskOutput', 'TaskStop', 'TaskUpdate',
+  'TeamCreate', 'TeamDelete', 'TodoWrite', 'ToolSearch', 'WebFetch', 'WebSearch',
+  'Write', 'ctx_inspect', 'snip',
+]
 const protectedDirectoryNames = new Set(['.jzl', '.git', '.openclaude'])
 
 function deny(message) {
@@ -155,6 +167,20 @@ function resolveSearchBase(context, path, requireDirectory) {
   }
 
   return targetPath
+}
+
+export function resolveOpenClaudeDisallowedTools(responsibility) {
+  if (!isRegisteredResponsibility(responsibility)) {
+    throw new Error('responsabilidade OpenClaude não é suportada')
+  }
+
+  const definition = resolveResponsibilityDefinition(responsibility)
+  const allowedTools = allowedToolsByAccess.get(definition.toolAccess)
+  if (allowedTools === undefined) {
+    throw new Error('perfil de ferramentas OpenClaude não é suportado')
+  }
+
+  return knownOpenClaudeToolNames.filter((name) => !allowedTools.has(name)).sort()
 }
 
 export function createOpenClaudeToolPolicy(projectRoot, responsibility, changeScope) {

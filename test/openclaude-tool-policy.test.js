@@ -14,13 +14,75 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, before, test } from 'node:test'
 
-import { createOpenClaudeToolPolicy } from '../src/openclaude-tool-policy.js'
+import {
+  createOpenClaudeToolPolicy,
+  resolveOpenClaudeDisallowedTools,
+} from '../src/openclaude-tool-policy.js'
 
 let temporaryBase
 let projectRoot
 let externalRoot
 let canUseTool
 let initialRootEntries
+
+const commonDisallowedTools = [
+  'Agent', 'AgentOutputTool', 'AskUserQuestion', 'Bash', 'BashOutputTool', 'Brief',
+  'CronCreate', 'CronDelete', 'CronList', 'EnterPlanMode', 'EnterWorktree',
+  'ExitPlanMode', 'ExitWorktree', 'KillShell', 'LSP', 'ListMcpResourcesTool',
+  'Monitor', 'NotebookEdit', 'PowerShell', 'ReadMcpResourceTool', 'RepoMap',
+  'SendMessage', 'SendUserMessage', 'Skill', 'Task', 'TaskCreate', 'TaskGet',
+  'TaskList', 'TaskOutput', 'TaskStop', 'TaskUpdate', 'TeamCreate', 'TeamDelete',
+  'TodoWrite', 'ToolSearch', 'WebFetch', 'WebSearch', 'ctx_inspect', 'snip',
+]
+
+test('planning e review restringem visibilidade ao conjunto read-only', () => {
+  for (const responsibility of ['mission-planning', 'mission-review']) {
+    const denied = resolveOpenClaudeDisallowedTools(responsibility)
+    assert.deepEqual(denied, [...commonDisallowedTools, 'Write', 'Edit'].sort())
+    for (const tool of ['Read', 'Glob', 'Grep']) assert.equal(denied.includes(tool), false)
+  }
+  assert.deepEqual(
+    resolveOpenClaudeDisallowedTools('mission-planning'),
+    resolveOpenClaudeDisallowedTools('mission-review'),
+  )
+})
+
+test('execution preserva visibilidade de cinco ferramentas e nega as demais conhecidas', () => {
+  const denied = resolveOpenClaudeDisallowedTools('mission-execution')
+  assert.deepEqual(denied, [...commonDisallowedTools].sort())
+  for (const tool of ['Read', 'Glob', 'Grep', 'Write', 'Edit']) {
+    assert.equal(denied.includes(tool), false)
+  }
+})
+
+test('denylist é determinística, única e independente por chamada', () => {
+  for (const responsibility of ['mission-planning', 'mission-review', 'mission-execution']) {
+    const first = resolveOpenClaudeDisallowedTools(responsibility)
+    const second = resolveOpenClaudeDisallowedTools(responsibility)
+    assert.deepEqual(first, second)
+    assert.deepEqual(first, [...first].sort())
+    assert.equal(new Set(first).size, first.length)
+    assert.notStrictEqual(first, second)
+    first.push('Read')
+    assert.deepEqual(resolveOpenClaudeDisallowedTools(responsibility), second)
+  }
+})
+
+test('visibilidade rejeita responsabilidade ausente ou inválida', () => {
+  for (const responsibility of [undefined, null, '', 'unknown', {}, 'read-only']) {
+    assert.throws(() => resolveOpenClaudeDisallowedTools(responsibility), {
+      message: 'responsabilidade OpenClaude não é suportada',
+    })
+  }
+})
+
+test('canUseTool nega ferramenta futura mesmo ausente da denylist de visibilidade', async () => {
+  for (const responsibility of ['mission-planning', 'mission-review', 'mission-execution']) {
+    assert.equal(resolveOpenClaudeDisallowedTools(responsibility).includes('FutureTool'), false)
+    const policy = createOpenClaudeToolPolicy(projectRoot, responsibility)
+    assert.equal((await policy('FutureTool', {})).behavior, 'deny')
+  }
+})
 
 before(() => {
   temporaryBase = mkdtempSync(join(tmpdir(), 'jzl-tool-policy-'))

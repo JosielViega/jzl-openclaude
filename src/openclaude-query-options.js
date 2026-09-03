@@ -1,4 +1,7 @@
-import { createOpenClaudeToolPolicy } from './openclaude-tool-policy.js'
+import {
+  createOpenClaudeToolPolicy,
+  resolveOpenClaudeDisallowedTools,
+} from './openclaude-tool-policy.js'
 import { validateProjectRoot } from './project-root.js'
 
 export function createOpenClaudeQueryOptions(
@@ -27,5 +30,6 @@ export function createOpenClaudeQueryOptions(
     ),
     abortController,
     model: model.trim(),
+    disallowedTools: resolveOpenClaudeDisallowedTools(responsibility),
   }
 }
