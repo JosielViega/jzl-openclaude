@@ -31,6 +31,8 @@ import { recordMissionExecutionSuccess } from '../src/execution-history.js'
 import { resolveMissionCorrectionHandoff } from '../src/handoff-processor.js'
 import { buildMissionExecutionContext } from '../src/context-builder.js'
 import { buildMissionExecutionPrompt } from '../src/mission-execution-prompt.js'
+import { checkProjectStandards } from '../src/project-standards-check.js'
+import { upgradeProjectStandards } from '../src/standards-profile-upgrade.js'
 import { ensureTraditionalWebProjectStructure } from '../src/traditional-web-structure.js'
 
 const evidenceFields = [
@@ -606,7 +608,8 @@ test('configured HTML-only usa criteria e legacy vazio mantém unavailable', asy
   assert.equal(accepted.mission.status, 'completed')
   assert.deepEqual(accepted.validation.results.map(({ id }) => id), [
     'criterion-0001', 'traditional-web:structure',
-    'traditional-web:public-exposure', 'traditional-web:ascii-paths',
+    'traditional-web:public-exposure', 'traditional-web:technology-boundary',
+    'traditional-web:ascii-paths',
     'traditional-web:source-text',
   ])
 
@@ -917,4 +920,78 @@ test('falha original e falha de history em unavailable são agregadas', async (t
     },
   )
   assert.equal(readProjectStateStore(context).missions[0].status, 'validation')
+})
+
+test('smoke Technology Boundary v3 para v4 termina em correction sem conteúdo', async (t) => {
+  const { context, projectRoot } = createTemporaryContext(t)
+  const mission = createMission('mission-0001')
+  initializeMissions(context, [mission])
+  initializeProjectConfigStore(context, { template: 'traditional-web', tools: {} })
+  ensureTraditionalWebProjectStructure(context)
+  const configPath = join(projectRoot, '.jzl', 'config.json')
+  writeFileSync(configPath, JSON.stringify({
+    schemaVersion: 1, template: 'traditional-web',
+    standardsProfile: 'traditional-web-v3', tools: {},
+  }, null, 2) + '\n')
+  const before = readFileSync(configPath)
+  const sourcePath = join(projectRoot, 'src', 'tool.py')
+  writeFileSync(sourcePath, 'DO_NOT_LEAK')
+  const current = checkProjectStandards(context)
+  assert.equal(current.standard, 'traditional-web-v3')
+  assert.equal(current.status, 'PASS')
+  assert.equal(current.results.some(({ id }) => id === 'traditional-web:technology-boundary'), false)
+
+  for (const dryRun of [true, false]) {
+    const failed = upgradeProjectStandards(context, { to: 'traditional-web-v4', dryRun })
+    assert.equal(failed.status, 'FAIL')
+    assert.equal(failed.upgraded, false)
+    assert.equal(failed.results.find(({ id }) => id === 'traditional-web:technology-boundary').status, 'FAIL')
+    assert.deepEqual(readFileSync(configPath), before)
+  }
+
+  rmSync(sourcePath)
+  const preview = upgradeProjectStandards(context, { to: 'traditional-web-v4', dryRun: true })
+  assert.equal(preview.status, 'PASS')
+  assert.equal(preview.upgraded, false)
+  assert.deepEqual(readFileSync(configPath), before)
+  const upgraded = upgradeProjectStandards(context, { to: 'traditional-web-v4' })
+  assert.equal(upgraded.status, 'PASS')
+  assert.equal(upgraded.upgraded, true)
+  assert.equal(JSON.parse(readFileSync(configPath, 'utf8')).standardsProfile, 'traditional-web-v4')
+  const checked = checkProjectStandards(context)
+  assert.equal(checked.standard, 'traditional-web-v4')
+  assert.equal(checked.status, 'PASS')
+
+  await assert.rejects(validateConfiguredProjectMission(context, mission.id), {
+    message: 'Mission não possui validação específica suficiente para comprovar o objetivo',
+  })
+  assert.equal(readProjectStateStore(context).missions[0].status, 'validation')
+  writeFileSync(sourcePath, 'DO_NOT_LEAK')
+  assert.equal(checkProjectStandards(context).status, 'FAIL')
+
+  const result = await validateConfiguredProjectMission(context, mission.id)
+  assert.equal(result.validation.status, 'FAIL')
+  assert.equal(result.mission.status, 'correction')
+  const boundary = result.validation.results.find(
+    ({ id }) => id === 'traditional-web:technology-boundary'
+  )
+  assert.deepEqual(boundary.evidence.issues, [{
+    path: 'src/tool.py', reason: 'technology-not-authorized',
+  }])
+  const event = readProjectEventStore(context).events.at(-1)
+  assert.equal(event.type, 'mission.validation.finished')
+  assert.equal(event.data.outcome, 'FAIL')
+  const handoff = resolveMissionCorrectionHandoff(context, mission.id)
+  assert.deepEqual(handoff.payload.failedValidators, [boundary])
+  const executionContext = buildMissionExecutionContext(context, {
+    mission: retryProjectMissionCorrection(context, mission.id),
+    standards: { id: 'traditional-web-v4', instructions: ['Preserve o projeto.'] },
+    handoff,
+  })
+  const prompt = buildMissionExecutionPrompt(executionContext)
+  assert.match(prompt, /src\/tool\.py/)
+  assert.match(prompt, /technology-not-authorized/)
+  for (const value of [boundary, event, handoff, executionContext, prompt]) {
+    assert.equal(JSON.stringify(value).includes('DO_NOT_LEAK'), false)
+  }
 })

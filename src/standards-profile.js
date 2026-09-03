@@ -1,11 +1,11 @@
 const supportedProfiles = new Map([
   ['traditional-web', new Set([
-    'traditional-web-v1', 'traditional-web-v2', 'traditional-web-v3',
+    'traditional-web-v1', 'traditional-web-v2', 'traditional-web-v3', 'traditional-web-v4',
   ])],
 ])
 
 const initialProfiles = new Map([
-  ['traditional-web', 'traditional-web-v3'],
+  ['traditional-web', 'traditional-web-v4'],
 ])
 
 const legacyProfiles = new Map([
@@ -16,6 +16,7 @@ const upgradeTransitions = new Map([
   ['traditional-web', new Map([
     ['traditional-web-v1', new Set(['traditional-web-v2'])],
     ['traditional-web-v2', new Set(['traditional-web-v3'])],
+    ['traditional-web-v3', new Set(['traditional-web-v4'])],
   ])],
 ])
 

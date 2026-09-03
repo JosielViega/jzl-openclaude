@@ -411,6 +411,23 @@ test('review sem autorização bloqueia fallback para FAIL antigo', (t) => {
   })
 })
 
+test('transporta Technology Boundary FAIL automaticamente sem conteúdo', (t) => {
+  const context = createContext(t)
+  const boundary = {
+    id: 'traditional-web:technology-boundary', status: 'FAIL',
+    evidence: {
+      exitCode: null, signal: null, stdout: '', stderr: '', errorMessage: null,
+      standardType: 'technology-boundary',
+      issues: [{ path: 'src/tool.ts', reason: 'technology-not-authorized' }],
+    },
+  }
+  const source = appendValidation(context, { results: [boundary] })
+  const handoff = resolveMissionCorrectionHandoff(context, 'mission-0001')
+  assert.equal(handoff.source.eventId, source.id)
+  assert.deepEqual(handoff.payload.failedValidators, [boundary])
+  assert.equal(JSON.stringify(handoff).includes('DO_NOT_LEAK'), false)
+})
+
 test('authorization incoerente falha fechado sem fallback antigo', (t) => {
   const context = createContext(t)
   appendValidation(context)

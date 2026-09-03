@@ -125,7 +125,7 @@ test('check-standards retorna PASS ou FAIL com exit zero sem criar State/Event S
   writeFileSync(join(root, 'public', 'assets', 'js', 'index.js'), 'export const value = 1\n')
 
   const passed = runJsonCli(['check-standards', '--project-root', root])
-  assert.equal(passed.output.standard, 'traditional-web-v3')
+  assert.equal(passed.output.standard, 'traditional-web-v4')
   assert.equal(passed.output.status, 'PASS')
 
   writeFileSync(join(root, 'public', 'assets', 'js', 'index.js'), 'const =')
@@ -350,7 +350,7 @@ test('init-project mínimo retorna um único JSON e persiste stores', (t) => {
     config: {
       schemaVersion: 1,
       template: 'traditional-web',
-      standardsProfile: 'traditional-web-v3',
+      standardsProfile: 'traditional-web-v4',
       tools: {},
     },
     state: { schemaVersion: 1 },
@@ -404,7 +404,7 @@ test('check-standards rejeita profile inválido sem modificar config', (t) => {
   const content = JSON.stringify({
     schemaVersion: 1,
     template: 'traditional-web',
-    standardsProfile: 'traditional-web-v4',
+    standardsProfile: 'traditional-web-unknown',
     tools: {},
   }, null, 2) + '\n'
   writeFileSync(configPath, content, 'utf8')
@@ -873,6 +873,52 @@ for (const [name, argumentsList, message] of [
     assert.equal(result.stderr.trim(), message)
   })
 }
+
+test('upgrade-standards CLI preflight v3 para v4 respeita Technology Boundary', (t) => {
+  const root = createRoot(t)
+  const context = createProjectContext(root)
+  mkdirSync(join(root, '.jzl'))
+  const configPath = join(root, '.jzl', 'config.json')
+  writeFileSync(configPath, JSON.stringify({
+    schemaVersion: 1, template: 'traditional-web',
+    standardsProfile: 'traditional-web-v3', tools: {},
+  }, null, 2) + '\n')
+  ensureTraditionalWebProjectStructure(context)
+  const sourcePath = join(root, 'src', 'tool.py')
+  writeFileSync(sourcePath, 'DO_NOT_LEAK_PUBLIC_EXPOSURE_CONTENT')
+  const before = readFileSync(configPath)
+
+  for (const extra of [['--dry-run'], []]) {
+    const { output } = runJsonCli([
+      'upgrade-standards', '--project-root', root,
+      '--to', 'traditional-web-v4', ...extra,
+    ])
+    assert.equal(output.status, 'FAIL')
+    assert.equal(output.upgraded, false)
+    assert.deepEqual(
+      output.results.find(({ id }) => id === 'traditional-web:technology-boundary')
+        .evidence.issues,
+      [{ path: 'src/tool.py', reason: 'technology-not-authorized' }],
+    )
+    assert.equal(JSON.stringify(output).includes('DO_NOT_LEAK'), false)
+    assert.deepEqual(readFileSync(configPath), before)
+  }
+
+  rmSync(sourcePath)
+  const preview = runJsonCli([
+    'upgrade-standards', '--project-root', root,
+    '--to', 'traditional-web-v4', '--dry-run',
+  ]).output
+  assert.equal(preview.status, 'PASS')
+  assert.equal(preview.upgraded, false)
+  assert.deepEqual(readFileSync(configPath), before)
+  const upgraded = runJsonCli([
+    'upgrade-standards', '--project-root', root, '--to', 'traditional-web-v4',
+  ]).output
+  assert.equal(upgraded.status, 'PASS')
+  assert.equal(upgraded.upgraded, true)
+  assert.equal(JSON.parse(readFileSync(configPath, 'utf8')).standardsProfile, 'traditional-web-v4')
+})
 
 test('review-mission exige flags e rejeita opções inválidas', () => {
   for (const [argumentsList, message] of [

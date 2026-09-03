@@ -18,11 +18,12 @@ test('verifica standards sem persistir estado e detecta JavaScript inválido', (
   writeFileSync(join(root, 'public', 'assets', 'js', 'invalid.js'), 'const =')
 
   const result = checkProjectStandards(context)
-  assert.equal(result.standard, 'traditional-web-v3')
+  assert.equal(result.standard, 'traditional-web-v4')
   assert.equal(result.status, 'FAIL')
   assert.deepEqual(result.results.map(({ id }) => id), [
     'traditional-web:structure',
     'traditional-web:public-exposure',
+    'traditional-web:technology-boundary',
     'traditional-web:ascii-paths',
     'traditional-web:source-text',
     'js-syntax:public/assets/js/invalid.js',
@@ -36,7 +37,7 @@ test('projeto vazio passa somente pelo standard ASCII sem exigir State', (t) => 
   initializeProjectConfigStore(context, { template: 'traditional-web', tools: {} })
   ensureTraditionalWebProjectStructure(context)
   assert.deepEqual(checkProjectStandards(context), {
-    standard: 'traditional-web-v3',
+    standard: 'traditional-web-v4',
     status: 'PASS',
     results: [{
       id: 'traditional-web:structure',
@@ -51,6 +52,13 @@ test('projeto vazio passa somente pelo standard ASCII sem exigir State', (t) => 
       evidence: {
         exitCode: null, signal: null, stdout: '', stderr: '', errorMessage: null,
         standardType: 'public-exposure', issues: [],
+      },
+    }, {
+      id: 'traditional-web:technology-boundary',
+      status: 'PASS',
+      evidence: {
+        exitCode: null, signal: null, stdout: '', stderr: '', errorMessage: null,
+        standardType: 'technology-boundary', issues: [],
       },
     }, {
       id: 'traditional-web:ascii-paths',
@@ -125,7 +133,7 @@ test('legacy e pinned são equivalentes e profile inválido falha sem mutação'
   const invalidPath = join(roots[1].root, '.jzl', 'config.json')
   writeFileSync(invalidPath, JSON.stringify({
     schemaVersion: 1, template: 'traditional-web',
-    standardsProfile: 'traditional-web-v4', tools: {},
+    standardsProfile: 'traditional-web-unknown', tools: {},
   }))
   const invalidBytes = readFileSync(invalidPath)
   assert.throws(() => checkProjectStandards(roots[1].context), {
@@ -233,5 +241,31 @@ test('public ausente ou inválido mantém Exposure PASS e aggregate Structure FA
     assert.equal(result.results[0].status, 'FAIL')
     assert.equal(result.results[1].id, 'traditional-web:public-exposure')
     assert.equal(result.results[1].status, 'PASS')
+  }
+})
+
+test('Technology Boundary pertence somente ao v4 e preserva v1, v2 e v3 congelados', (t) => {
+  for (const profile of ['traditional-web-v1', 'traditional-web-v2', 'traditional-web-v3', 'traditional-web-v4']) {
+    const root = mkdtempSync(join(tmpdir(), `jzl-boundary-pinning-${profile}-`))
+    t.after(() => rmSync(root, { recursive: true, force: true }))
+    const context = createProjectContext(root)
+    mkdirSync(join(root, '.jzl'))
+    writeFileSync(join(root, '.jzl', 'config.json'), JSON.stringify({
+      schemaVersion: 1, template: 'traditional-web', standardsProfile: profile, tools: {},
+    }, null, 2) + '\n')
+    ensureTraditionalWebProjectStructure(context)
+    writeFileSync(join(root, 'src', 'tool.py'), 'DO_NOT_LEAK')
+
+    const result = checkProjectStandards(context)
+    const boundary = result.results.find(({ id }) => id === 'traditional-web:technology-boundary')
+    if (profile === 'traditional-web-v4') {
+      assert.equal(result.status, 'FAIL')
+      assert.deepEqual(boundary.evidence.issues, [{
+        path: 'src/tool.py', reason: 'technology-not-authorized',
+      }])
+    } else {
+      assert.equal(result.status, 'PASS')
+      assert.equal(boundary, undefined)
+    }
   }
 })

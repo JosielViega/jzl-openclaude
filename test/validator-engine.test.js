@@ -336,3 +336,29 @@ test('executa Public Exposure no engine sem short-circuit', (t) => {
   assert.equal(errored.status, 'ERROR')
   assert.deepEqual(errored.results.map(({ status }) => status), ['FAIL', 'ERROR'])
 })
+
+test('executa Technology Boundary no engine sem short-circuit', (t) => {
+  const { context, projectRoot } = createTemporaryContext(t)
+  ensureTraditionalWebProjectStructure(context)
+  writeFileSync(join(projectRoot, 'src', 'tool.py'), 'DO_NOT_LEAK')
+  const validation = runProjectValidators(context, [
+    { id: 'traditional-web:structure', type: 'traditional-web-structure' },
+    { id: 'traditional-web:technology-boundary', type: 'traditional-web-technology-boundary' },
+    createValidator('command-pass', ''),
+  ])
+  assert.equal(validation.status, 'FAIL')
+  assert.deepEqual(validation.results.map(({ status }) => status), ['PASS', 'FAIL', 'PASS'])
+  assert.deepEqual(validation.results[1].evidence.issues, [{
+    path: 'src/tool.py', reason: 'technology-not-authorized',
+  }])
+
+  const errored = runProjectValidators(context, [
+    { id: 'traditional-web:technology-boundary', type: 'traditional-web-technology-boundary' },
+    {
+      id: 'command-error', type: 'command',
+      executable: join(projectRoot, 'missing.exe'), args: [],
+    },
+  ])
+  assert.equal(errored.status, 'ERROR')
+  assert.deepEqual(errored.results.map(({ status }) => status), ['FAIL', 'ERROR'])
+})

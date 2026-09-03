@@ -5,6 +5,7 @@ import { validateExecutionChangeSet } from './execution-change-set.js'
 import { validateTraditionalWebStructureIssue } from './traditional-web-structure.js'
 import { validateTraditionalWebSourceTextIssue } from './traditional-web-source-text.js'
 import { validateTraditionalWebPublicExposureIssue } from './traditional-web-public-exposure.js'
+import { validateTraditionalWebTechnologyBoundaryIssue } from './traditional-web-technology-boundary.js'
 
 const missionIdPattern = /^mission-\d{4,}$/
 const eventIdPattern = /^event-\d{6,}$/
@@ -106,6 +107,8 @@ function validateEvidence(validator) {
         ? validateTraditionalWebSourceTextIssue
         : evidence.standardType === 'public-exposure'
           ? validateTraditionalWebPublicExposureIssue
+        : evidence.standardType === 'technology-boundary'
+          ? validateTraditionalWebTechnologyBoundaryIssue
         : null
     const expectedId = evidence.standardType === 'structure'
       ? 'traditional-web:structure'
@@ -113,6 +116,8 @@ function validateEvidence(validator) {
         ? 'traditional-web:source-text'
         : evidence.standardType === 'public-exposure'
           ? 'traditional-web:public-exposure'
+        : evidence.standardType === 'technology-boundary'
+          ? 'traditional-web:technology-boundary'
         : null
     if (
       issueValidator === null
@@ -170,6 +175,7 @@ function validateEvidence(validator) {
       'traditional-web:structure',
       'traditional-web:source-text',
       'traditional-web:public-exposure',
+      'traditional-web:technology-boundary',
     ].includes(validator.id)) {
       throw new Error('metadata do standard no handoff é incompleta')
     }

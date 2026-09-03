@@ -343,3 +343,24 @@ test('renderiza Public Exposure issues sem conteúdo ou target', () => {
   assert.match(prompt, /public\/vendor[\s\S]+dependency-path-publicly-exposed/)
   assert.equal(prompt.includes('DO_NOT_LEAK'), false)
 })
+
+test('renderiza Technology Boundary issues sem conteúdo ou target', () => {
+  const boundary = failedValidator('traditional-web:technology-boundary', {
+    exitCode: null,
+    stderr: '',
+    standardType: 'technology-boundary',
+    issues: [
+      { path: 'src/tool.py', reason: 'technology-not-authorized' },
+      { path: 'src/tool.ts', reason: 'technology-not-authorized' },
+    ],
+  })
+  const prompt = buildMissionExecutionPrompt(createExecutionContext(handoff({
+    payload: { failedValidators: [boundary], omittedCount: 0 },
+  })))
+  assert.match(prompt, /Traditional Web Standard:\ntraditional-web:technology-boundary/)
+  assert.match(prompt, /Tipo:\ntechnology-boundary/)
+  assert.match(prompt, /Tecnologias não autorizadas detectadas:/)
+  assert.match(prompt, /src\/tool\.py[\s\S]+technology-not-authorized/)
+  assert.match(prompt, /src\/tool\.ts[\s\S]+technology-not-authorized/)
+  assert.equal(prompt.includes('DO_NOT_LEAK'), false)
+})

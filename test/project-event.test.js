@@ -655,3 +655,62 @@ test('rejeita metadata cruzada entre Structure, ASCII, criterion e scope', () =>
     results: [result],
   })))
 })
+
+test('rejeita metadata incompleta, ambígua ou incoerente de Technology Boundary', () => {
+  const issue = { path: 'src/tool.py', reason: 'technology-not-authorized' }
+  for (const [status, toStatus, overrides] of [
+    ['PASS', 'completed', { issues: [issue] }],
+    ['PASS', 'completed', { errorMessage: 'erro' }],
+    ['FAIL', 'correction', { issues: [] }],
+    ['FAIL', 'correction', { issues: [issue], errorMessage: 'erro' }],
+    ['ERROR', 'validation', { issues: [issue], errorMessage: 'erro' }],
+    ['ERROR', 'validation', { errorMessage: '' }],
+    ['PASS', 'completed', { standardType: undefined }],
+    ['PASS', 'completed', { standardType: 'source-text' }],
+    ['PASS', 'completed', { violations: [] }],
+    ['PASS', 'completed', { criterionType: 'file-exists' }],
+    ['PASS', 'completed', { scopeType: 'allowed-paths' }],
+    ['PASS', 'completed', { stdout: 'unexpected' }],
+    ['PASS', 'completed', { exitCode: 0 }],
+  ]) {
+    assert.throws(() => validateProjectEvent(validation(status, toStatus, {
+      results: [{
+        id: 'traditional-web:technology-boundary', status,
+        evidence: evidence({
+          exitCode: null, standardType: 'technology-boundary', issues: [], ...overrides,
+        }),
+      }],
+    })))
+  }
+})
+
+test('aceita evidence Technology Boundary PASS, FAIL e ERROR sem conteúdo', () => {
+  const issue = {
+    path: 'src/tool.py', reason: 'technology-not-authorized',
+  }
+  for (const [status, toStatus, issues, errorMessage] of [
+    ['PASS', 'completed', [], null],
+    ['FAIL', 'correction', [issue], null],
+    ['ERROR', 'validation', [], 'falha de filesystem'],
+  ]) {
+    const value = validation(status, toStatus, {
+      results: [{
+        id: 'traditional-web:technology-boundary', status,
+        evidence: evidence({
+          exitCode: null, standardType: 'technology-boundary', issues, errorMessage,
+        }),
+      }],
+    })
+    assert.strictEqual(validateProjectEvent(value), value)
+  }
+  for (const issues of [
+    [], [issue, issue],
+    [{ path: 'public/b/.env', reason: issue.reason }, { path: 'public/a/.env', reason: issue.reason }],
+    [{ path: 'src/tool.py', reason: 'other' }],
+  ]) assert.throws(() => validateProjectEvent(validation('FAIL', 'correction', {
+    results: [{
+      id: 'traditional-web:technology-boundary', status: 'FAIL',
+      evidence: evidence({ exitCode: null, standardType: 'technology-boundary', issues }),
+    }],
+  })))
+})

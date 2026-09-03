@@ -92,6 +92,24 @@ ${issues}
 Esses problemas foram detectados deterministicamente pelo JZL.`
     }
 
+    if (validator.evidence.standardType === 'technology-boundary') {
+      const issues = validator.evidence.issues
+        .map(({ path, reason }) => `- ${path}\n  Motivo: ${reason}`)
+        .join('\n\n')
+
+      return `Traditional Web Standard:
+${validator.id}
+
+Tipo:
+technology-boundary
+
+Tecnologias não autorizadas detectadas:
+
+${issues}
+
+Esses problemas foram detectados deterministicamente pelo JZL.`
+    }
+
     const violations = validator.evidence.violations
       .map((path) => `- ${path}`)
       .join('\n')

@@ -28,8 +28,13 @@ const traditionalWebV3Instructions = [
   'Não exponha em public/ artefatos de controle, diretórios de dependências, arquivos de ambiente ou manifests de dependências definidos pelo Public Exposure Contract.',
 ]
 
+const traditionalWebV4Instructions = [
+  ...traditionalWebV3Instructions,
+  'Use somente PHP, SQL, JavaScript, HTML e CSS como tecnologias fonte first-party do traditional-web.',
+]
+
 function assertImplementedProfile(profile) {
-  if (!['traditional-web-v1', 'traditional-web-v2', 'traditional-web-v3'].includes(profile)) {
+  if (!['traditional-web-v1', 'traditional-web-v2', 'traditional-web-v3', 'traditional-web-v4'].includes(profile)) {
     throw new Error('standardsProfile não possui implementação no Standards Resolver')
   }
 }
@@ -38,6 +43,7 @@ function instructionsForProfile(profile) {
   if (profile === 'traditional-web-v1') return traditionalWebV1Instructions
   if (profile === 'traditional-web-v2') return traditionalWebV2Instructions
   if (profile === 'traditional-web-v3') return traditionalWebV3Instructions
+  if (profile === 'traditional-web-v4') return traditionalWebV4Instructions
   throw new Error('standardsProfile não possui implementação no Standards Resolver')
 }
 
@@ -70,19 +76,26 @@ function createProjectValidatorsForProfile(context, config, profile) {
     throw new Error('executable PHP não configurado para traditional-web')
   }
 
-  const publicExposureValidators = profile === 'traditional-web-v3'
+  const publicExposureValidators = ['traditional-web-v3', 'traditional-web-v4'].includes(profile)
     ? [{
         id: 'traditional-web:public-exposure',
         type: 'traditional-web-public-exposure',
       }]
     : []
-  const sourceTextValidators = ['traditional-web-v2', 'traditional-web-v3'].includes(profile)
+  const technologyBoundaryValidators = profile === 'traditional-web-v4'
+    ? [{
+        id: 'traditional-web:technology-boundary',
+        type: 'traditional-web-technology-boundary',
+      }]
+    : []
+  const sourceTextValidators = ['traditional-web-v2', 'traditional-web-v3', 'traditional-web-v4'].includes(profile)
     ? [{ id: 'traditional-web:source-text', type: 'traditional-web-source-text' }]
     : []
 
   return [
     { id: 'traditional-web:structure', type: 'traditional-web-structure' },
     ...publicExposureValidators,
+    ...technologyBoundaryValidators,
     { id: 'traditional-web:ascii-paths', type: 'traditional-web-ascii-paths' },
     ...sourceTextValidators,
     ...javascriptFiles.map(({ path }) => ({

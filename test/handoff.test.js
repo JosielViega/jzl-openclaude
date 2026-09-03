@@ -329,3 +329,24 @@ test('rejeita evidence incoerente de criterion no handoff', () => {
     message: 'evidence do acceptance criterion do handoff é inválida',
   })
 })
+
+test('aceita somente Technology Boundary FAIL válido no Handoff', () => {
+  const boundary = failedValidator({
+    id: 'traditional-web:technology-boundary',
+    evidence: {
+      exitCode: null, signal: null, stdout: '', stderr: '', errorMessage: null,
+      standardType: 'technology-boundary',
+      issues: [{ path: 'src/tool.ts', reason: 'technology-not-authorized' }],
+    },
+  })
+  const value = validHandoff({ payload: { failedValidators: [boundary] } })
+  assert.strictEqual(validateHandoff(value), value)
+  for (const changed of [
+    { ...boundary, status: 'ERROR' },
+    { ...boundary, id: 'traditional-web:source-text' },
+    { ...boundary, evidence: { ...boundary.evidence, issues: [] } },
+    { ...boundary, evidence: { ...boundary.evidence, issues: [{ path: 'public/x', reason: 'other' }] } },
+  ]) assert.throws(() => validateHandoff(validHandoff({
+    payload: { failedValidators: [changed] },
+  })))
+})

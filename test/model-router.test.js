@@ -163,3 +163,15 @@ test('configure inválido e Store ausente falham sem inicialização', (t) => {
     responsibility: 'mission-review', model: 'model',
   }), { message: 'arquivo de configuração do projeto não existe' })
 })
+
+test('configure model preserva profile v3 explicitamente pinned', (t) => {
+  const context = setup(t)
+  writeProjectConfigStore(context, {
+    schemaVersion: 1, template: 'traditional-web',
+    standardsProfile: 'traditional-web-v3', tools: {},
+  })
+  configureProjectModel(context, {
+    responsibility: 'mission-execution', model: 'model-a',
+  })
+  assert.equal(readProjectConfigStore(context).standardsProfile, 'traditional-web-v3')
+})

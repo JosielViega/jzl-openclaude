@@ -491,3 +491,25 @@ test('preserva issues de Public Exposure como clone sem mutar Handoff', (t) => {
   assert.notStrictEqual(evidence.issues[0], exposure.evidence.issues[0])
   assert.deepEqual(raw, snapshot)
 })
+
+test('preserva issues de Technology Boundary como clone sem mutar Handoff', (t) => {
+  const context = createContext(t)
+  const boundary = {
+    id: 'traditional-web:technology-boundary', status: 'FAIL',
+    evidence: {
+      exitCode: null, signal: null, stdout: '', stderr: '', errorMessage: null,
+      standardType: 'technology-boundary',
+      issues: [{ path: 'src/tool.py', reason: 'technology-not-authorized' }],
+    },
+  }
+  const raw = handoff({ payload: { failedValidators: [boundary] } })
+  const snapshot = structuredClone(raw)
+  const built = buildMissionExecutionContext(context, {
+    mission: mission(), standards: standards(), handoff: raw,
+  })
+  const evidence = built.handoff.payload.failedValidators[0].evidence
+  assert.deepEqual(evidence, boundary.evidence)
+  assert.notStrictEqual(evidence.issues, boundary.evidence.issues)
+  assert.notStrictEqual(evidence.issues[0], boundary.evidence.issues[0])
+  assert.deepEqual(raw, snapshot)
+})

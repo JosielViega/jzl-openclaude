@@ -55,13 +55,13 @@ function phpTool(argsPrefix = []) {
   return { php: { executable: process.execPath, argsPrefix } }
 }
 
-test('resolve novo profile traditional-web-v3 com instruções do JZL', (t) => {
+test('resolve novo profile traditional-web-v4 com instruções do JZL', (t) => {
   const { context } = createProject(t)
   const first = resolveProjectStandards(context)
   const second = resolveProjectStandards(context)
 
   assert.deepEqual(first, {
-    id: 'traditional-web-v3',
+    id: 'traditional-web-v4',
     template: 'traditional-web',
     instructions: [
       'Use PHP, MySQL, JavaScript, HTML e CSS como stack principal do projeto.',
@@ -75,6 +75,7 @@ test('resolve novo profile traditional-web-v3 com instruções do JZL', (t) => {
       'Mantenha JavaScript em public/assets/js/, CSS em public/assets/css/, HTML em public/ e PHP em public/ ou src/.',
       'Arquivos fonte PHP, JavaScript, CSS, HTML e SQL de primeira parte devem possuir UTF-8 válido.',
       'Não exponha em public/ artefatos de controle, diretórios de dependências, arquivos de ambiente ou manifests de dependências definidos pelo Public Exposure Contract.',
+      'Use somente PHP, SQL, JavaScript, HTML e CSS como tecnologias fonte first-party do traditional-web.',
     ],
   })
   assert.notStrictEqual(first, second)
@@ -114,7 +115,7 @@ test('resolve validators target v2 sem alterar config pinned v1 ou legacy', (t) 
   }
 })
 
-test('resolver target v3 e rejeição v4 não alteram config', (t) => {
+test('resolver target v3 e rejeição de profile desconhecido não alteram config', (t) => {
   const project = createPinnedV1Project(t)
   const configPath = join(project.root, '.jzl', 'config.json')
   const before = readFileSync(configPath)
@@ -127,10 +128,30 @@ test('resolver target v3 e rejeição v4 não alteram config', (t) => {
     ],
   )
   assert.throws(
-    () => resolveProjectValidatorsForProfile(project.context, 'traditional-web-v4'),
+    () => resolveProjectValidatorsForProfile(project.context, 'traditional-web-unknown'),
     { message: 'standardsProfile alvo não é suportado para o template' },
   )
   assert.deepEqual(readFileSync(configPath), before)
+})
+
+test('preserva a ordem completa congelada dos profiles e acrescenta somente Technology Boundary no v4', (t) => {
+  const { context, root } = createProject(t, phpTool())
+  writeFileSync(join(root, 'src', 'App.php'), '<?php')
+  writeFileSync(join(root, 'public', 'assets', 'js', 'app.js'), '')
+  const configPath = join(root, '.jzl', 'config.json')
+  const before = readFileSync(configPath)
+  for (const [profile, standards] of [
+    ['traditional-web-v1', ['structure', 'ascii-paths']],
+    ['traditional-web-v2', ['structure', 'ascii-paths', 'source-text']],
+    ['traditional-web-v3', ['structure', 'public-exposure', 'ascii-paths', 'source-text']],
+    ['traditional-web-v4', ['structure', 'public-exposure', 'technology-boundary', 'ascii-paths', 'source-text']],
+  ]) {
+    assert.deepEqual(resolveProjectValidatorsForProfile(context, profile).map(({ id }) => id), [
+      ...standards.map((name) => `traditional-web:${name}`),
+      'js-syntax:public/assets/js/app.js', 'php-syntax:src/App.php',
+    ])
+    assert.deepEqual(readFileSync(configPath), before)
+  }
 })
 
 test('um PHP gera validator com executable e argsPrefix configurados', (t) => {
@@ -144,6 +165,9 @@ test('um PHP gera validator com executable e argsPrefix configurados', (t) => {
   }, {
     id: 'traditional-web:public-exposure',
     type: 'traditional-web-public-exposure',
+  }, {
+    id: 'traditional-web:technology-boundary',
+    type: 'traditional-web-technology-boundary',
   }, {
     id: 'traditional-web:ascii-paths',
     type: 'traditional-web-ascii-paths',
@@ -167,7 +191,7 @@ test('ordena múltiplos PHP por projectPath e usa barra no ID', (t) => {
 
   assert.deepEqual(
     resolveProjectValidators(context).map((validator) => validator.id),
-    ['traditional-web:structure', 'traditional-web:public-exposure', 'traditional-web:ascii-paths', 'traditional-web:source-text', 'php-syntax:app/a.php', 'php-syntax:app/b.php', 'php-syntax:z.PHP'],
+    ['traditional-web:structure', 'traditional-web:public-exposure', 'traditional-web:technology-boundary', 'traditional-web:ascii-paths', 'traditional-web:source-text', 'php-syntax:app/a.php', 'php-syntax:app/b.php', 'php-syntax:z.PHP'],
   )
 })
 
@@ -187,7 +211,7 @@ test('ignora diretórios reservados e de dependências em qualquer nível', (t) 
 
   assert.deepEqual(
     resolveProjectValidators(context).map((validator) => validator.id),
-    ['traditional-web:structure', 'traditional-web:public-exposure', 'traditional-web:ascii-paths', 'traditional-web:source-text', 'php-syntax:index.php'],
+    ['traditional-web:structure', 'traditional-web:public-exposure', 'traditional-web:technology-boundary', 'traditional-web:ascii-paths', 'traditional-web:source-text', 'php-syntax:index.php'],
   )
 })
 
@@ -209,6 +233,9 @@ test('não segue diretório symlink ou junction', (t) => {
     id: 'traditional-web:public-exposure',
     type: 'traditional-web-public-exposure',
   }, {
+    id: 'traditional-web:technology-boundary',
+    type: 'traditional-web-technology-boundary',
+  }, {
     id: 'traditional-web:ascii-paths',
     type: 'traditional-web-ascii-paths',
   }, {
@@ -226,6 +253,9 @@ test('retorna validator ASCII quando não há PHP de primeira parte', (t) => {
   }, {
     id: 'traditional-web:public-exposure',
     type: 'traditional-web-public-exposure',
+  }, {
+    id: 'traditional-web:technology-boundary',
+    type: 'traditional-web-technology-boundary',
   }, {
     id: 'traditional-web:ascii-paths',
     type: 'traditional-web-ascii-paths',
@@ -245,13 +275,14 @@ test('ordena JavaScript antes de PHP e usa paths relativos no node check', (t) =
   assert.deepEqual(validators.map(({ id }) => id), [
     'traditional-web:structure',
     'traditional-web:public-exposure',
+    'traditional-web:technology-boundary',
     'traditional-web:ascii-paths',
     'traditional-web:source-text',
     'js-syntax:a.JS',
     'js-syntax:z.js',
     'php-syntax:index.php',
   ])
-  assert.deepEqual(validators[4], {
+  assert.deepEqual(validators[5], {
     id: 'js-syntax:a.JS',
     type: 'command',
     executable: process.execPath,
@@ -267,6 +298,7 @@ test('inclui somente extensão JavaScript .js case-insensitive', (t) => {
   assert.deepEqual(resolveProjectValidators(context).map(({ id }) => id), [
     'traditional-web:structure',
     'traditional-web:public-exposure',
+    'traditional-web:technology-boundary',
     'traditional-web:ascii-paths',
     'traditional-web:source-text',
     'js-syntax:app.js',
@@ -302,7 +334,7 @@ test('propaga Config Store ausente e configuração inválida', (t) => {
   writeFileSync(join(root, '.jzl', 'config.json'), JSON.stringify({
     schemaVersion: 1,
     template: 'traditional-web',
-    standardsProfile: 'traditional-web-v4',
+    standardsProfile: 'traditional-web-unknown',
     tools: {},
   }), 'utf8')
   assert.throws(() => resolveProjectStandards(context), {

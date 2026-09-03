@@ -6,6 +6,7 @@ import { posix } from 'node:path'
 import { validateTraditionalWebStructureIssue } from './traditional-web-structure.js'
 import { validateTraditionalWebSourceTextIssue } from './traditional-web-source-text.js'
 import { validateTraditionalWebPublicExposureIssue } from './traditional-web-public-exposure.js'
+import { validateTraditionalWebTechnologyBoundaryIssue } from './traditional-web-technology-boundary.js'
 
 const eventIdPattern = /^event-\d{6,}$/
 const missionIdPattern = /^mission-\d{4,}$/
@@ -223,6 +224,7 @@ function validateStandardEvidence(result, evidence) {
       'traditional-web:structure',
       'traditional-web:source-text',
       'traditional-web:public-exposure',
+      'traditional-web:technology-boundary',
     ].includes(result.id)) {
       throw new Error('metadata do standard na evidence é incompleta')
     }
@@ -295,6 +297,23 @@ function validateStandardEvidence(result, evidence) {
       throw new Error('metadata do standard na evidence é inválida')
     }
     for (const issue of evidence.issues) validateTraditionalWebPublicExposureIssue(issue)
+    const keys = evidence.issues.map(({ path, reason }) => `${path}\u0000${reason}`)
+    if (
+      new Set(keys).size !== keys.length
+      || [...keys].sort().some((key, index) => key !== keys[index])
+    ) {
+      throw new Error('metadata do standard na evidence é inválida')
+    }
+    findings = evidence.issues
+  } else if (evidence.standardType === 'technology-boundary') {
+    if (
+      result.id !== 'traditional-web:technology-boundary'
+      || !Array.isArray(evidence.issues)
+      || Object.hasOwn(evidence, 'violations')
+    ) {
+      throw new Error('metadata do standard na evidence é inválida')
+    }
+    for (const issue of evidence.issues) validateTraditionalWebTechnologyBoundaryIssue(issue)
     const keys = evidence.issues.map(({ path, reason }) => `${path}\u0000${reason}`)
     if (
       new Set(keys).size !== keys.length
